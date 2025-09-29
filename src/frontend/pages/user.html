@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LangSum • User</title>
+  <link rel="stylesheet" href="/src/frontend/css/base.css">
+  <link rel="stylesheet" href="/src/frontend/css/components.css">
+  <link rel="stylesheet" href="/src/frontend/css/layout.css">
+  <link rel="stylesheet" href="/src/frontend/css/pages/user.css">
+  <script type="module" src="/src/frontend/js/i18n-runtime.js" data-i18n-init></script>
+  <script type="module" src="/src/frontend/js/i18n-ui.js"></script>
+</head>
+<body>
+  <header class="site">
+    <div class="inner container nav-3">
+      <div class="left flex ai-c" style="gap:8px">
+        <a id="newpost-link" class="btn" href="/create" style="display:none">New Post</a>
+      </div>
+      <nav class="flex ai-c" style="gap:8px">
+        <a class="btn btn--subtle" href="/home" data-i18n="nav.home">Home</a>
+        <a id="profile-link" class="btn btn--subtle" href="#" style="display:none">Profile</a>
+        <a id="settings-link" class="btn btn--subtle" href="/user/settings" style="display:none">Settings</a>
+        <a id="login-link" class="btn btn--subtle" href="/login" data-i18n="nav.login">Login</a>
+        <button id="logout-btn" class="btn btn--ghost" style="display:none" data-i18n="nav.logout">Logout</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="row">
+      <div class="col-12">
+        <div class="card">
+          <div class="flex ai-c" style="gap:16px; margin-bottom:16px;">
+            <div id="avatar-placeholder" style="width:60px; height:60px; border-radius:50%; background-color:#ff7a1a; color:white; display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:bold;"></div>
+            <div>
+              <h1 id="display" style="margin:0;">User</h1>
+              <div id="meta" style="color:var(--tx-1)"></div>
+            </div>
+            <a id="profile-settings-btn" class="btn btn--subtle" href="/user/settings" style="display:none; margin-left:auto;">Settings</a>
+          </div>
+          <div class="tabs">
+            <button id="tab-posts" class="tab active" data-tab="posts" data-i18n="user.posts">Posts</button>
+            <button id="tab-replies" class="tab" data-tab="replies" data-i18n="user.replies">Replies</button>
+            <button id="tab-post-bookmarks" class="tab" data-tab="postBookmarks" style="display:none">Post bookmarks</button>
+            <button id="tab-tag-bookmarks" class="tab" data-tab="tagBookmarks" style="display:none">Tag bookmarks</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="row">
+      <div class="col-12">
+        <div class="card">
+          <div class="flex ai-c jc-b">
+            <h2 id="content-title" data-i18n="user.posts">Posts</h2>
+          </div>
+          <div class="flex ai-c" style="gap:8px; margin-bottom:12px; margin-top:4px">
+            <label class="flex ai-c" style="gap:6px">
+              <span class="hide-sm">Sort</span>
+              <select id="sort" class="input" style="max-width:140px">
+                <option value="newest" selected>Newest</option>
+                <option value="top">Top</option>
+              </select>
+            </label>
+          </div>
+          <div id="posts" class="posts" style="display:block;"></div>
+          <div id="replies" class="replies" style="display:none;"></div>
+          <div id="post-bookmarks" class="bookmarks" style="display:none;"></div>
+          <div id="tag-bookmarks" class="bookmarks" style="display:none;"></div>
+          <div id="profile-loading" class="badge" style="display:none; margin-top:12px;">Loading…</div>
+          <div id="profile-infinite-sentinel" style="width:100%; height:1px;"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site">
+    <div class="inner container flex ai-c jc-b">
+      <div> <span id="year"></span> LangSum</div>
+      <div class="hide-sm">Built with Windsurf guidelines</div>
+    </div>
+  </footer>
+
+  <script type="module">
+    import { authHeaders, refreshAuthUI, clearToken, getToken, me as fetchMe } from '/src/frontend/js/auth.js?v=2';
+    import { showToast } from '/src/frontend/js/toast.js';
+    import { t } from '/src/frontend/js/i18n-runtime.js';
+    import { initBookmarkToggles } from '/src/frontend/js/bookmarks.js';
+
+    document.getElementById('year').textContent = new Date().getFullYear().toString();
+
+    // Guest guard
+    if (!getToken()) { window.location.href = '/login'; }
+
+    refreshAuthUI();  // Call refreshAuthUI on page load to handle auth state
+    document.getElementById('logout-btn')?.addEventListener('click', async () => {
+      try { await fetch('/auth/logout', { method: 'POST', headers: { ...authHeaders() } }); } catch {}
+      clearToken();
+      showToast(t('toast.signed_out'),'ok');
+      window.location.href = '/home';
+    });
+
+    const usp = new URLSearchParams(location.search);
+    let handle = usp.get('handle');
+    let hasValidHandle = true;
+    if (!handle) {
+      // Support clean URL: /user/{handle}
+      const parts = location.pathname.split('/').filter(Boolean);
+      // Expected: ['user', '{handle}']
+      if (parts[0] === 'user' && parts[1]) {
+        handle = decodeURIComponent(parts[1]);
+      }
+    }
+    const elDisplay = document.getElementById('display');
+    const elMeta = document.getElementById('meta');
+    const elPosts = document.getElementById('posts');
+    const elReplies = document.getElementById('replies');
+    const elPostBookmarks = document.getElementById('post-bookmarks');
+    const elTagBookmarks = document.getElementById('tag-bookmarks');
+    const elSort = document.getElementById('sort');
+    const elAvatar = document.getElementById('avatar-placeholder');
+    const elContentTitle = document.getElementById('content-title');
+    const elTabPosts = document.getElementById('tab-posts');
+    const elTabReplies = document.getElementById('tab-replies');
+    const elTabPostBookmarks = document.getElementById('tab-post-bookmarks');
+    const elTabTagBookmarks = document.getElementById('tab-tag-bookmarks');
+    const loadingIndicator = document.getElementById('profile-loading');
+    const sentinel = document.getElementById('profile-infinite-sentinel');
+
+    const LIMIT = 10;
+    let currentTab = 'posts';
+    let viewerHandle = null;
+    let isOwnProfile = false;
+    const state = {
+      posts: { offset: 0, total: 0, hasMore: true, isLoading: false, loaded: false },
+      replies: { offset: 0, total: 0, hasMore: true, isLoading: false, loaded: false },
+      postBookmarks: { offset: 0, total: 0, hasMore: true, isLoading: false, loaded: false },
+      tagBookmarks: { offset: 0, total: 0, hasMore: true, isLoading: false, loaded: false }
+    };
+
+    const io = sentinel ? new IntersectionObserver((entries) => {
+      if (!entries[0].isIntersecting) return;
+      if (currentTab === 'posts') {
+        if (state.posts.hasMore) loadPosts(true);
+      } else if (currentTab === 'replies') {
+        if (state.replies.hasMore) loadReplies(true);
+      } else if (currentTab === 'postBookmarks') {
+        if (state.postBookmarks.hasMore) loadPostBookmarks(true);
+      } else if (currentTab === 'tagBookmarks') {
+        if (state.tagBookmarks.hasMore) loadTagBookmarks(true);
+      }
+    }, { root: null, rootMargin: '0px 0px 200px 0px', threshold: 0.1 }) : null;
+
+    function resetTab(tab){
+      const st = state[tab];
+      if(!st) return;
+      st.offset = 0;
+      st.total = 0;
+      st.hasMore = true;
+      st.isLoading = false;
+      st.loaded = false;
+    }
+
+    function updateObserver(){
+      if (!io || !sentinel) return;
+      io.disconnect();
+      const st = state[currentTab];
+      if (st && st.loaded && st.hasMore) {
+        io.observe(sentinel);
+      }
+    }
+
+    document.body.dataset.profileHandle = handle || '';
+
+    if(!handle){
+      elDisplay.textContent = 'User not specified';
+      hasValidHandle = false;
+    }
+
+    try{
+      const meData = await fetchMe();
+      viewerHandle = meData?.handle || null;
+      document.body.dataset.viewerHandle = viewerHandle || '';
+      if(viewerHandle && handle){
+        isOwnProfile = viewerHandle === handle;
+        if(isOwnProfile){
+          elTabPostBookmarks?.style.setProperty('display','inline-flex');
+          elTabTagBookmarks?.style.setProperty('display','inline-flex');
+        }
+      }
+    }catch{}
+
+    async function loadUser(){
+      if(!hasValidHandle) return;
+      try{
+        const res = await fetch(`/users/${encodeURIComponent(handle)}`, { headers:{ ...authHeaders() }});
+        if(!res.ok) throw new Error(await res.text());
+        const u = await res.json();
+        elDisplay.textContent = u.display_name || u.handle || 'User';
+        elMeta.textContent = `@${u.handle} · ${u.locale || '—'} · since ${u.created_at ? new Date(u.created_at).toLocaleDateString() : ''}`;
+        // Set avatar placeholder with initial letter
+        const initial = (u.display_name || u.handle || 'U').charAt(0).toUpperCase();
+        elAvatar.textContent = initial;
+        // If this is the current user, expose quick links to settings via profile link (handled in header)
+      }catch(err){
+        console.error('Error loading user:', err);
+        elDisplay.textContent = 'User not found or error';
+        elMeta.textContent = '';
+        elAvatar.textContent = 'U';
+        showToast(t('toast.load_failed'),'err');
+      }
+    }
+
+    async function loadPosts(append=false){
+      if(!hasValidHandle) return;
+      const st = state.posts;
+      if (st.isLoading || (!append && st.loaded && currentTab !== 'posts')) return;
+      const offsetToUse = append ? st.offset : 0;
+      if(!append){
+        st.offset = 0;
+        st.total = 0;
+        st.hasMore = true;
+        elPosts.innerHTML = '<div class="badge">Loading…</div>';
+      } else if (loadingIndicator) {
+        loadingIndicator.style.display = 'block';
+      }
+      st.isLoading = true;
+      try{
+        const params = new URLSearchParams({ limit:String(LIMIT), offset:String(offsetToUse), sort:elSort.value });
+        const res = await fetch(`/users/${encodeURIComponent(handle)}/posts?${params.toString()}`, { headers:{ ...authHeaders() }});
+        if(!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        const items = Array.isArray(data.items) ? data.items : [];
+        const markup = items.length ? items.map(p => `
+          <article class="post">
+            <h3><a href="/post/${p.id}">${p.title}</a></h3>
+            <div class="meta">${p.created_at ? new Date(p.created_at).toLocaleString() : ''} · score ${p.score}</div>
+            <div class="flex" style="gap:6px; flex-wrap:wrap; margin:.5rem 0;">
+              ${Array.isArray(p.tags) && p.tags.length ? p.tags.map(t => `<button class="badge chip-tag" type="button" data-slug="${t.slug}">#${t.slug}</button>`).join('') : ''}
+            </div>
+            <p>${(p.body_md || '').slice(0, 200)}${(p.body_md || '').length > 200 ? '…' : ''}</p>
+            ${isOwnProfile ? `<div class="flex" style="gap:8px; margin-top:8px"><button class="btn btn--subtle delete-post" data-id="${p.id}">Delete</button></div>` : ''}
+          </article>
+        `).join('') : '';
+        if(append && items.length){
+          elPosts.insertAdjacentHTML('beforeend', markup);
+        } else if(!append){
+          elPosts.innerHTML = markup || '<div class="badge">No posts yet</div>';
+        }
+        st.offset = offsetToUse + items.length;
+        const total = typeof data.total === 'number' ? data.total : st.offset;
+        st.total = total;
+        st.hasMore = st.offset < total && items.length === LIMIT;
+        if(!append){ initBookmarkToggles(elPosts); }
+      }catch(err){
+        console.error('Failed to load posts', err);
+        if(!append){
+          elPosts.innerHTML = '<div class="badge badge--err">Failed to load posts</div>';
+        }
+        st.hasMore = false;
+        showToast(t('toast.load_failed'),'err');
+      }finally{
+        st.isLoading = false;
+        st.loaded = true;
+        if (loadingIndicator) loadingIndicator.style.display = 'none';
+        updateObserver();
+      }
+    }
+
+    async function loadReplies(append=false){
+      if(!hasValidHandle) return;
+      const st = state.replies;
+      if (st.isLoading || (!append && st.loaded && currentTab !== 'replies')) return;
+      const offsetToUse = append ? st.offset : 0;
+      if(!append){
+        st.offset = 0;
+        st.total = 0;
+        st.hasMore = true;
+        elReplies.innerHTML = '<div class="badge">Loading…</div>';
+      } else if (loadingIndicator) {
+        loadingIndicator.style.display = 'block';
+      }
+      st.isLoading = true;
+      try{
+        const params = new URLSearchParams({ limit:String(LIMIT), offset:String(offsetToUse), sort:elSort.value });
+        const res = await fetch(`/users/${encodeURIComponent(handle)}/replies?${params.toString()}`, { headers:{ ...authHeaders() }});
+        if(!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        const items = Array.isArray(data.items) ? data.items : [];
+        const markup = items.length ? items.map(r => `
+          <article class="reply">
+            <div class="meta">${r.created_at ? new Date(r.created_at).toLocaleString() : ''} · score ${r.score}</div>
+            <div class="flex" style="gap:6px; flex-wrap:wrap; margin:.5rem 0;">
+              ${Array.isArray(r.tags) && r.tags.length ? r.tags.map(t => `<span class="badge">#${t.slug}</span>`).join('') : ''}
+            </div>
+            <p>${(r.body_md || '').slice(0, 200)}${(r.body_md || '').length > 200 ? '…' : ''}</p>
+            <p><a href="/post/${r.post_id}">View parent post</a></p>
+            ${isOwnProfile ? `<div class="flex" style="gap:8px; margin-top:8px"><button class="btn btn--subtle delete-reply" data-id="${r.id}">Delete</button></div>` : ''}
+          </article>
+        `).join('') : '';
+        if(append && items.length){
+          elReplies.insertAdjacentHTML('beforeend', markup);
+        } else if(!append){
+          elReplies.innerHTML = markup || '<div class="badge">No replies yet</div>';
+        }
+        st.offset = offsetToUse + items.length;
+        const total = typeof data.total === 'number' ? data.total : st.offset;
+        st.total = total;
+        st.hasMore = st.offset < total && items.length === LIMIT;
+      }catch(err){
+        console.error('Failed to load replies', err);
+        if(!append){
+          elReplies.innerHTML = '<div class="badge badge--err">Failed to load replies</div>';
+        }
+        st.hasMore = false;
+        showToast(t('toast.load_failed'),'err');
+      }finally{
+        st.isLoading = false;
+        st.loaded = true;
+        if (loadingIndicator) loadingIndicator.style.display = 'none';
+        updateObserver();
+      }
+    }
+
+    function switchTab(tab) {
+      currentTab = tab;
+      elTabPosts.classList.toggle('active', tab === 'posts');
+      elTabReplies.classList.toggle('active', tab === 'replies');
+      elTabPostBookmarks?.classList.toggle('active', tab === 'postBookmarks');
+      elTabTagBookmarks?.classList.toggle('active', tab === 'tagBookmarks');
+      elPosts.style.display = tab === 'posts' ? 'block' : 'none';
+      elReplies.style.display = tab === 'replies' ? 'block' : 'none';
+      if(elPostBookmarks) elPostBookmarks.style.display = tab === 'postBookmarks' ? 'block' : 'none';
+      if(elTagBookmarks) elTagBookmarks.style.display = tab === 'tagBookmarks' ? 'block' : 'none';
+      if(tab === 'posts') elContentTitle.textContent = 'Posts';
+      else if(tab === 'replies') elContentTitle.textContent = 'Replies';
+      else if(tab === 'postBookmarks') elContentTitle.textContent = 'Post bookmarks';
+      else elContentTitle.textContent = 'Tag bookmarks';
+      if (!state[tab].loaded) {
+        if (tab === 'posts') {
+          loadPosts(false);
+        } else if (tab === 'replies') {
+          loadReplies(false);
+        } else if (tab === 'postBookmarks') {
+          loadPostBookmarks(false);
+        } else if (tab === 'tagBookmarks') {
+          loadTagBookmarks(false);
+        }
+      } else {
+        updateObserver();
+      }
+    }
+
+    elSort.addEventListener('change', () => {
+      resetTab('posts');
+      resetTab('replies');
+      resetTab('postBookmarks');
+      resetTab('tagBookmarks');
+      if (currentTab === 'posts') {
+        loadPosts(false);
+      } else {
+        loadReplies(false);
+      }
+    });
+    elTabPosts.addEventListener('click', () => switchTab('posts'));
+    elTabReplies.addEventListener('click', () => switchTab('replies'));
+    elTabPostBookmarks?.addEventListener('click', () => {
+      if(!isOwnProfile){ showToast('Bookmarks are only visible to the owner','info'); return; }
+      switchTab('postBookmarks');
+    });
+    elTabTagBookmarks?.addEventListener('click', () => {
+      if(!isOwnProfile){ showToast('Bookmarks are only visible to the owner','info'); return; }
+      switchTab('tagBookmarks');
+    });
+
+    elPosts.addEventListener('click', (evt) => {
+      const chip = evt.target.closest?.('.chip-tag');
+      if(!chip) return;
+      const slug = chip.getAttribute('data-slug');
+      if(!slug) return;
+      const url = new URL('/dashboard', window.location.origin);
+      url.searchParams.set('tags', slug);
+      window.location.href = `${url.pathname}?${url.searchParams.toString()}`;
+    });
+
+    if(isOwnProfile){
+      elPosts.addEventListener('click', async (evt) => {
+        const btn = evt.target.closest?.('.delete-post');
+        if(!btn) return;
+        const postId = btn.getAttribute('data-id');
+        if(!postId) return;
+        if(!confirm('Delete this post? This cannot be undone.')) return;
+        try{
+          const res = await fetch(`/posts/${encodeURIComponent(postId)}`, {
+            method:'DELETE',
+            headers:{ ...authHeaders() }
+          });
+          if(!res.ok) throw new Error(await res.text());
+          showToast('Post deleted','ok');
+          btn.closest('article')?.remove();
+        }catch(err){
+          console.error('Delete post failed', err);
+          showToast('Failed to delete post','err');
+        }
+      });
+
+      elReplies.addEventListener('click', async (evt) => {
+        const btn = evt.target.closest?.('.delete-reply');
+        if(!btn) return;
+        const replyId = btn.getAttribute('data-id');
+        if(!replyId) return;
+        if(!confirm('Delete this reply? This cannot be undone.')) return;
+        try{
+          const res = await fetch(`/posts/reply/${encodeURIComponent(replyId)}`, {
+            method:'DELETE',
+            headers:{ ...authHeaders() }
+          });
+          if(!res.ok) throw new Error(await res.text());
+          showToast('Reply deleted','ok');
+          btn.closest('article')?.remove();
+        }catch(err){
+          console.error('Delete reply failed', err);
+          showToast('Failed to delete reply','err');
+        }
+      });
+    }
+
+    async function loadPostBookmarks(append=false){
+      if(!hasValidHandle || !isOwnProfile) return;
+      const st = state.postBookmarks;
+      if (st.isLoading || (!append && st.loaded && currentTab !== 'postBookmarks')) return;
+      const offsetToUse = append ? st.offset : 0;
+      if(!append){
+        st.offset = 0;
+        st.total = 0;
+        st.hasMore = true;
+        elPostBookmarks.innerHTML = '<div class="badge">Loading…</div>';
+      } else if (loadingIndicator) {
+        loadingIndicator.style.display = 'block';
+      }
+      st.isLoading = true;
+      try{
+        const params = new URLSearchParams({ limit:String(LIMIT), offset:String(offsetToUse) });
+        const res = await fetch(`/users/${encodeURIComponent(handle)}/bookmarks?${params.toString()}`, { headers:{ ...authHeaders() }});
+        if(res.status === 403){
+          elPostBookmarks.innerHTML = '<div class="badge">Bookmarks are private.</div>';
+          st.hasMore = false;
+          return;
+        }
+        if(!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        const items = Array.isArray(data.items) ? data.items : [];
+        const markup = items.length ? items.map(b => `
+          <article class="post">
+            <div class="flex ai-c jc-b" style="gap:12px">
+              <h3 style="margin:0"><a href="/post/${b.post_id}">${b.title}</a></h3>
+              <button class="bookmark-toggle is-active" data-target-type="post" data-target-id="${b.post_id}" aria-label="Remove bookmark"></button>
+            </div>
+            <div class="meta">Bookmarked ${b.created_at ? new Date(b.created_at).toLocaleString() : ''}${b.author ? ` · by ${b.author}` : ''}${typeof b.score === 'number' ? ` · score ${b.score}` : ''}</div>
+            <p>${b.excerpt || ''}</p>
+            <div class="flex" style="gap:6px; flex-wrap:wrap; margin:.5rem 0;">
+              ${Array.isArray(b.tags) && b.tags.length ? b.tags.map(t => `<span class="badge">#${t.slug}</span>`).join('') : ''}
+            </div>
+          </article>
+        `).join('') : '';
+        if(append && items.length){
+          elPostBookmarks.insertAdjacentHTML('beforeend', markup);
+        } else if(!append){
+          elPostBookmarks.innerHTML = markup || '<div class="badge">No bookmarks yet</div>';
+        }
+        st.offset = offsetToUse + items.length;
+        const total = typeof data.total === 'number' ? data.total : st.offset;
+        st.total = total;
+        st.hasMore = st.offset < total && items.length === LIMIT;
+        initBookmarkToggles(elPostBookmarks);
+      }catch(err){
+        console.error('Failed to load bookmarks', err);
+        if(!append){
+          elPostBookmarks.innerHTML = '<div class="badge badge--err">Failed to load bookmarks</div>';
+        }
+        st.hasMore = false;
+        showToast(t('toast.load_failed'),'err');
+      }finally{
+        st.isLoading = false;
+        st.loaded = true;
+        if (loadingIndicator) loadingIndicator.style.display = 'none';
+        updateObserver();
+      }
+    }
+
+    async function loadTagBookmarks(append=false){
+      if(!hasValidHandle || !isOwnProfile) return;
+      const st = state.tagBookmarks;
+      if (st.isLoading || (!append && st.loaded && currentTab !== 'tagBookmarks')) return;
+      const offsetToUse = append ? st.offset : 0;
+      if(!append){
+        st.offset = 0;
+        st.total = 0;
+        st.hasMore = true;
+        elTagBookmarks.innerHTML = '<div class="badge">Loading…</div>';
+      } else if (loadingIndicator) {
+        loadingIndicator.style.display = 'block';
+      }
+      st.isLoading = true;
+      try{
+        const params = new URLSearchParams({ limit:String(LIMIT), offset:String(offsetToUse) });
+        const res = await fetch(`/users/${encodeURIComponent(handle)}/tag-bookmarks?${params.toString()}`, { headers:{ ...authHeaders() }});
+        if(res.status === 403){
+          elTagBookmarks.innerHTML = '<div class="badge">Bookmarks are private.</div>';
+          st.hasMore = false;
+          return;
+        }
+        if(!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        const items = Array.isArray(data.items) ? data.items : [];
+        const markup = items.length ? items.map(b => `
+          <article class="post">
+            <div class="flex ai-c jc-b" style="gap:12px">
+              <h3 style="margin:0"><a href="/tags/${encodeURIComponent(b.slug)}">#${b.slug}</a></h3>
+              <button class="bookmark-toggle is-active" data-target-type="tag" data-target-id="${b.tag_id}" aria-label="Remove bookmark"></button>
+            </div>
+            <div class="meta">Bookmarked ${b.created_at ? new Date(b.created_at).toLocaleString() : ''}</div>
+            <p class="hint" style="margin:0">${b.label || b.slug}</p>
+          </article>
+        `).join('') : '';
+        if(append && items.length){
+          elTagBookmarks.insertAdjacentHTML('beforeend', markup);
+        } else if(!append){
+          elTagBookmarks.innerHTML = markup || '<div class="badge">No tag bookmarks yet</div>';
+        }
+        st.offset = offsetToUse + items.length;
+        const total = typeof data.total === 'number' ? data.total : st.offset;
+        st.total = total;
+        st.hasMore = st.offset < total && items.length === LIMIT;
+        initBookmarkToggles(elTagBookmarks);
+      }catch(err){
+        console.error('Failed to load tag bookmarks', err);
+        if(!append){
+          elTagBookmarks.innerHTML = '<div class="badge badge--err">Failed to load tag bookmarks</div>';
+        }
+        st.hasMore = false;
+        showToast(t('toast.load_failed'),'err');
+      }finally{
+        st.isLoading = false;
+        st.loaded = true;
+        if (loadingIndicator) loadingIndicator.style.display = 'none';
+        updateObserver();
+      }
+    }
+
+    if (hasValidHandle) {
+      await loadUser();
+      await loadPosts(false);
+    }
+  </script>
+</body>
+</html>

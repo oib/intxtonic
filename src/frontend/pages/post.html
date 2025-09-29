@@ -1,0 +1,649 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LangSum • Post</title>
+  <link rel="preload" href="/src/frontend/css/base.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="/src/frontend/css/base.css"></noscript>
+  <link rel="preload" href="/src/frontend/css/components.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="/src/frontend/css/components.css"></noscript>
+  <link rel="preload" href="/src/frontend/css/layout.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="/src/frontend/css/layout.css"></noscript>
+  <link rel="preload" href="/src/frontend/css/pages/post.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="/src/frontend/css/pages/post.css"></noscript>
+  <script type="module" src="/src/frontend/js/i18n-runtime.js" data-i18n-init></script>
+  <script type="module" src="/src/frontend/js/i18n-ui.js"></script>
+</head>
+<body>
+  <header class="site">
+    <div class="inner container nav-3">
+      <div class="left"></div>
+      <nav class="flex ai-c" style="gap:8px">
+        <a class="btn btn--subtle" href="/dashboard">Dashboard</a>
+        <a id="profile-link" class="btn btn--subtle" href="#" style="display:none">Profile</a>
+        <a id="login-link" class="btn btn--subtle" href="/login">Login</a>
+        <button id="logout-btn" class="btn btn--ghost" style="display:none">Logout</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="row">
+      <div class="col-12">
+        <article class="card">
+          <h1 id="title">Post</h1>
+          <div id="post-tags-public" class="flex" style="gap:6px; flex-wrap:wrap; margin:0 0 8px 0;"></div>
+          <div class="flex ai-c" style="gap:12px; color:var(--tx-1)">
+            <div id="meta" style="flex:1"></div>
+            <button class="bookmark-toggle" data-target-type="post" data-target-id="" id="post-bookmark" aria-label="Bookmark post"></button>
+          </div>
+          <div id="body"></div>
+          <!-- Voting row -->
+          <div class="flex ai-c" style="gap:8px; margin-top:16px">
+            <button id="vote-up-post" class="btn btn--subtle">▲</button>
+            <button id="vote-down-post" class="btn btn--subtle">▼</button>
+            <span class="badge"><span data-i18n="post.score">Score</span>: <span id="post-score">0</span></span>
+          </div>
+          <!-- Share/Copy row -->
+          <div class="flex ai-c" style="gap:8px; margin-top:12px">
+            <button id="share-post" class="btn btn--subtle" data-i18n="post.share">Share</button>
+            <button id="copy-link" class="btn btn--subtle" data-i18n="post.copy_link">Copy Link</button>
+          </div>
+          <!-- Report row -->
+          <div class="flex ai-c" style="gap:8px; margin-top:12px">
+            <button id="report-post" class="btn btn--subtle">Report</button>
+          </div>
+          <!-- AI actions row -->
+          <div class="flex ai-c" style="gap:8px; margin-top:12px">
+            <button id="translate-post" class="btn btn--subtle" data-i18n="post.translate">Translate</button>
+            <button id="summarize-post" class="btn btn--subtle" data-i18n="post.summarize">Summarize</button>
+          </div>
+          <div id="tag-admin" class="grid" style="gap:8px; margin-top:16px; display:none">
+            <div class="flex ai-c" style="gap:8px">
+              <strong>Tags</strong>
+              <div id="post-tags" class="flex" style="gap:6px"></div>
+            </div>
+            <div class="flex ai-c" style="gap:8px">
+              <input id="attach-slug" class="input" placeholder="Attach tag by slug (max 7)" style="max-width:240px">
+              <button id="btn-attach" class="btn">Attach</button>
+              <div id="tag-suggestions" class="card" style="position:absolute; margin-top:80px; display:none; max-width:260px; z-index:20"></div>
+            </div>
+            <div id="tag-limit-hint" class="login-hint">Up to 7 tags per post. Use the field to search existing tags; if it doesn't exist and you are admin, it will be created automatically.</div>
+          </div>
+        </article>
+      </div>
+    </section>
+    <section class="row">
+      <div class="col-12">
+        <div class="card">
+          <h2>Replies</h2>
+          <div id="replies"></div>
+          <form id="reply-form" class="grid" style="gap:12px; margin-top:16px">
+            <textarea id="reply-body" class="input" rows="4" placeholder="Write a reply..."></textarea>
+            <div class="flex ai-c" style="gap:8px; flex-wrap:wrap">
+              <input id="reply-image-file" type="file" accept="image/png,image/jpeg,image/jpg,image/gif,image/webp" style="max-width:280px">
+              <input id="reply-image-alt" class="input" placeholder="Alt text (optional)" style="max-width:220px">
+              <button id="btn-upload-reply-image" class="btn btn--subtle" type="button">Upload image</button>
+              <span class="badge" style="color:var(--tx-1)">Up to 5MB; PNG/JPG/GIF/WebP</span>
+            </div>
+            <button class="btn" type="submit">Reply</button>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site">
+    <div class="inner container flex ai-c jc-b">
+      <div> &copy; <span id="year"></span> LangSum</div>
+      <div class="hide-sm">Built with Windsurf guidelines</div>
+    </div>
+  </footer>
+
+  <script type="module">
+    import { authHeaders, getToken, clearToken } from '/src/frontend/js/auth.js';
+    import { showToast } from '/src/frontend/js/toast.js';
+    import { bindPostPageAIActions } from '/src/frontend/js/ai.js';
+    import { t } from '/src/frontend/js/i18n-runtime.js';
+    import { initBookmarkToggles } from '/src/frontend/js/bookmarks.js';
+
+    document.getElementById('year').textContent = new Date().getFullYear().toString();
+
+    // Guest guard: redirect unauthenticated users to login
+    if (!getToken()) { window.location.href = '/login'; }
+
+    const params = new URLSearchParams(location.search);
+    let postId = params.get('id');
+    let hasValidPostId = true;
+    if (!postId) {
+      // Support clean URL: /post/{post_id}
+      const parts = location.pathname.split('/').filter(Boolean);
+      // Expected: ['post', '{post_id}']
+      if (parts[0] === 'post' && parts[1]) {
+        postId = decodeURIComponent(parts[1]);
+      }
+    }
+    if (!postId || postId === 'null' || postId === 'undefined') {
+      console.warn('Invalid or missing postId in URL');
+      // Show a friendly message and stop further loading attempts
+      document.getElementById('title').textContent = 'Post';
+      const meta = document.getElementById('meta');
+      if (meta) meta.textContent = 'Invalid post URL';
+      // Mark invalid; avoid making XHRs with an invalid ID
+      hasValidPostId = false;
+    }
+
+    // Auth UI
+    const loginLink = document.getElementById('login-link');
+    const logoutBtn = document.getElementById('logout-btn');
+    const profileLink = document.getElementById('profile-link');
+    function refreshAuthUI(){
+      const has = !!getToken();
+      loginLink.style.display = has ? 'none' : 'inline-flex';
+      logoutBtn.style.display = has ? 'inline-flex' : 'none';
+      profileLink.style.display = 'none';
+      const defaultLabel = profileLink.dataset.defaultLabel || profileLink.textContent || 'Profile';
+      profileLink.dataset.defaultLabel = defaultLabel;
+      profileLink.textContent = defaultLabel;
+      if (has) {
+        fetch('/auth/me', { headers: { ...authHeaders() }})
+          .then(r => r.ok ? r.json() : null)
+          .then(u => {
+            if (u && u.handle) {
+              profileLink.href = `/user/${encodeURIComponent(u.handle)}`;
+              const label = (u.display_name || u.handle || '').trim();
+              if (label) profileLink.textContent = label;
+              profileLink.style.display = 'inline-flex';
+            }
+          })
+          .catch(() => {});
+      }
+    }
+    logoutBtn.addEventListener('click', async () => {
+      try { await fetch('/auth/logout', { method: 'POST', headers: { ...authHeaders() } }); } catch {}
+      clearToken();
+      showToast(t('toast.signed_out'),'ok');
+      window.location.href = '/home';
+    });
+    refreshAuthUI();
+
+    // Small helper: fetch with timeout
+    async function fetchWithTimeout(resource, options = {}, timeoutMs = 8000) {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const res = await fetch(resource, { ...options, signal: controller.signal });
+        clearTimeout(id);
+        return res;
+      } catch (err) {
+        clearTimeout(id);
+        throw err;
+      }
+    }
+
+    // Safe markdown rendering (local): escape HTML then apply basic Markdown
+    function escapeHTML(s){
+      return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+    function renderMarkdownSafe(src){
+      let m = escapeHTML(src||'');
+      // headings (support #, ##, ### at line start)
+      m = m.replace(/^###\s+(.+)$/gm, '<h3>$1<\/h3>');
+      m = m.replace(/^##\s+(.+)$/gm, '<h2>$1<\/h2>');
+      m = m.replace(/^#\s+(.+)$/gm, '<h1>$1<\/h1>');
+      // code blocks ```...
+      m = m.replace(/```([\s\S]*?)```/g, (match, p1) => `<pre><code>${p1.replace(/\n/g,'<br>')}<\/code><\/pre>`);
+      // inline code `code`
+      m = m.replace(/`([^`]+)`/g, '<code>$1<\/code>');
+      // bold and italic
+      m = m.replace(/\*\*([^*]+)\*\*/g, '<strong>$1<\/strong>');
+      m = m.replace(/\*([^*]+)\*/g, '<em>$1<\/em>');
+      // images ![alt](url) – allow only http(s) or /uploads paths
+      m = m.replace(/!\[([^\]]*)\]\((https?:[^)\s]+|\/uploads\/[^^)\s]+)\)/g, '<img src="$2" alt="$1" loading="lazy">');
+      // links [text](url)
+      m = m.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1<\/a>');
+      // unordered lists
+      m = m.replace(/^(?:-\s+.+(?:\n|$))+?/gm, (block) => {
+        const items = block.trim().split(/\n/).map(l => l.replace(/^-\s+/, '')).map(t => `<li>${t}<\/li>`).join('');
+        return `<ul>${items}<\/ul>`;
+      });
+      // paragraphs: wrap lines separated by blank lines
+      m = m.replace(/(^|\n)\n+/g, '\n\n');
+      m = m.split(/\n\n+/).map(p => p.match(/^<h[1-3]>|^<ul>|^<pre>/) ? p : `<p>${p.replace(/\n/g,'<br>')}<\/p>`).join('');
+      return m;
+    }
+
+    async function loadPost(){
+      const t = document.getElementById('title');
+      const m = document.getElementById('meta');
+      const b = document.getElementById('body');
+      try{
+        const res = await fetch(`/posts/${postId}`, { headers:{ ...authHeaders() }});
+        if(!res.ok) throw new Error(await res.text());
+        const p = await res.json();
+        t.textContent = p.title;
+        m.textContent = `by ${p.author||'unknown'} · ${new Date(p.created_at).toLocaleString()}`;
+        const bookmarkBtn = document.getElementById('post-bookmark');
+        if(bookmarkBtn){
+          bookmarkBtn.dataset.targetId = p.id;
+          initBookmarkToggles(bookmarkBtn.parentElement);
+        }
+        b.innerHTML = renderMarkdownSafe(p.body_md || '');
+        const scoreEl = document.getElementById('post-score');
+        if(scoreEl) scoreEl.textContent = String(p.score ?? 0);
+      }catch(err){ showToast('Failed to load post','err'); }
+    }
+
+    async function loadReplies(){
+      const el = document.getElementById('replies');
+      el.innerHTML = '<div class="badge">Loading…</div>';
+      try{
+        const res = await fetchWithTimeout(`/posts/${postId}/replies`, { headers:{ ...authHeaders() }}, 10000);
+        if(!res.ok){
+          const txt = await res.text().catch(() => '');
+          const msg = txt || `HTTP ${res.status}`;
+          if(res.status === 401 || res.status === 403){
+            showToast('Login required to view replies','warn');
+            setTimeout(() => { window.location.href = '/login'; }, 600);
+            return;
+          }
+          el.innerHTML = `<div class="badge badge--err">Failed to load replies (${res.status}).</div>
+            <div class="flex ai-c" style="gap:8px; margin-top:8px">
+              <button id="retry-replies" class="btn btn--subtle">Retry</button>
+              <span class="hide-sm" style="color:var(--tx-1); font-size:12px">${msg.slice(0,180)}</span>
+            </div>`;
+          const rb = document.getElementById('retry-replies');
+          rb?.addEventListener('click', () => loadReplies());
+          return;
+        }
+        let rows;
+        try {
+          rows = await res.json();
+        } catch (e) {
+          console.error('Error parsing replies JSON:', e);
+          el.innerHTML = `<div class="badge badge--err">Replies response was not valid JSON.</div>
+            <div class="flex ai-c" style="gap:8px; margin-top:8px">
+              <button id="retry-replies" class="btn btn--subtle">Retry</button>
+            </div>`;
+          document.getElementById('retry-replies')?.addEventListener('click', () => loadReplies());
+          return;
+        }
+        const markup = rows.length ? rows.map(r => `
+          <div class="reply" style="border-top:1px solid rgba(185,236,255,.12); padding-top:12px; margin-top:12px;">
+            <div class="meta" style="color:var(--tx-1)">by ${r.author||'unknown'} · ${new Date(r.created_at).toLocaleString()}</div>
+            <div class="reply-body">${renderMarkdownSafe(r.body_md||'')}</div>
+            <div class="flex ai-c" style="gap:8px">
+              <button type="button" class="btn btn--subtle vote-reply" data-id="${r.id}" data-value="1">▲</button>
+              <button type="button" class="btn btn--subtle vote-reply" data-id="${r.id}" data-value="-1">▼</button>
+              <span class="badge">Score: <span class="reply-score" data-id="${r.id}">${r.score ?? 0}</span></span>
+              <button class="btn btn--subtle report-reply" data-id="${r.id}">Report</button>
+            </div>
+          </div>
+        `).join('') : '<div class="badge">No replies yet</div>';
+        console.log('Generated replies markup:', markup);  // Debug log for markup
+        el.innerHTML = markup;  // Ensure DOM update
+      } catch (err) {
+        console.error('Error in loadReplies:', err);
+        const msg = (err && err.name === 'AbortError') ? 'Request timed out' : (err?.message || 'Failed to load replies');
+        el.innerHTML = `<div class="badge badge--err">${msg}</div>
+          <div class="flex ai-c" style="gap:8px; margin-top:8px">
+            <button id="retry-replies" class="btn btn--subtle">Retry</button>
+          </div>`;
+        document.getElementById('retry-replies')?.addEventListener('click', () => loadReplies());
+      }
+    }
+
+    // Delegate reply voting clicks to the container so handlers survive re-renders
+    const repliesContainer = document.getElementById('replies');
+    repliesContainer?.addEventListener('click', async (evt) => {
+      const target = evt.target;
+      const btn = target && (target.closest ? target.closest('button.vote-reply') : null);
+      if (!btn) return;
+      evt.preventDefault();
+      if(!getToken()){ showToast(t('toast.login_to_vote'),'warn'); return; }
+      const id = btn.getAttribute('data-id');
+      const value = parseInt(btn.getAttribute('data-value'));
+      // Guard: disable both buttons for this reply immediately to prevent double-submit
+      const parent = btn.closest('.reply');
+      const upBtn = parent?.querySelector(`button.vote-reply[data-id="${id}"][data-value="1"]`);
+      const downBtn = parent?.querySelector(`button.vote-reply[data-id="${id}"][data-value="-1"]`);
+      upBtn && upBtn.setAttribute('disabled','true');
+      downBtn && downBtn.setAttribute('disabled','true');
+      try{
+        const res = await fetch('/posts/vote', { method:'POST', headers:{ 'Content-Type':'application/json', ...authHeaders() }, body: JSON.stringify({ target_type:'reply', target_id:id, value }) });
+        if(res.ok){
+          showToast(t('toast.vote_recorded'),'ok');
+          // Update score locally and tint selected arrow
+          const scoreEl = document.querySelector(`.reply-score[data-id="${id}"]`);
+          if(scoreEl){
+            const cur = parseInt(scoreEl.textContent || '0', 10) || 0;
+            scoreEl.textContent = String(cur + value);
+          }
+          if(value > 0 && upBtn){ upBtn.classList.add('voted-up'); upBtn.style.background='rgba(0,255,0,.08)'; }
+          if(value < 0 && downBtn){ downBtn.classList.add('voted-down'); downBtn.style.background='rgba(255,0,0,.08)'; }
+          return;
+        }
+        // Handle already-voted specially; keep disabled so UX matches policy
+        if(res.status === 409){
+          showToast(t('toast.already_voted'),'info');
+          return;
+        }
+        // Other errors: re-enable to allow retry
+        const txt = await res.text().catch(() => '');
+        throw new Error(txt || `HTTP ${res.status}`);
+      }catch(err){
+        showToast(t('toast.vote_failed'),'err');
+        // Re-enable on failure (non-409)
+        upBtn && upBtn.removeAttribute('disabled');
+        downBtn && downBtn.removeAttribute('disabled');
+      }
+    });
+
+    document.getElementById('reply-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const body = document.getElementById('reply-body').value.trim();
+      if(!body){ showToast(t('toast.write_something'),'warn'); return; }
+      try{
+        const res = await fetch('/posts/reply', { method:'POST', headers:{ 'Content-Type':'application/json', ...authHeaders() }, body: JSON.stringify({ post_id: postId, body_md: body }) });
+        if(!res.ok) throw new Error(await res.text());
+        document.getElementById('reply-body').value = '';
+        showToast(t('toast.reply_posted'),'ok');
+        loadReplies();
+      }catch(err){ showToast(t('toast.reply_failed'),'err'); }
+    });
+
+    // Upload image for reply and insert markdown
+    function insertAtCursor(textarea, snippet){
+      const start = textarea.selectionStart || 0;
+      const end = textarea.selectionEnd || 0;
+      const before = textarea.value.slice(0, start);
+      const after = textarea.value.slice(end);
+      textarea.value = before + snippet + after;
+      const pos = start + snippet.length;
+      textarea.selectionStart = textarea.selectionEnd = pos;
+      textarea.focus();
+    }
+    document.getElementById('btn-upload-reply-image')?.addEventListener('click', async () => {
+      const fileInput = document.getElementById('reply-image-file');
+      const altInput = document.getElementById('reply-image-alt');
+      const ta = document.getElementById('reply-body');
+      const file = fileInput?.files?.[0];
+      if(!file){ showToast('Choose an image first','warn'); return; }
+      if(file.size > 5*1024*1024){ showToast('Image too large (max 5MB)','warn'); return; }
+      const fd = new FormData();
+      fd.append('file', file);
+      try{
+        const res = await fetch('/uploads', { method:'POST', headers: { ...authHeaders() }, body: fd });
+        if(!res.ok){
+          const txt = await res.text();
+          showToast(txt || 'Upload failed', 'err');
+          return;
+        }
+        const data = await res.json();
+        if(data?.url){
+          const alt = (altInput?.value || '').trim();
+          const md = `\n\n![${alt}](${data.url})\n\n`;
+          insertAtCursor(ta, md);
+          showToast('Image uploaded','ok');
+          if(fileInput) fileInput.value = '';
+          if(altInput) altInput.value = '';
+        } else {
+          showToast('Upload failed','err');
+        }
+      }catch(err){ showToast('Upload failed','err'); }
+    });
+
+    // Wire post voting
+    function bindPostVotes(){
+      const up = document.getElementById('vote-up-post');
+      const down = document.getElementById('vote-down-post');
+      const scoreEl = document.getElementById('post-score');
+      const act = async (val) => {
+        if(!getToken()){ showToast('Login to vote','warn'); return; }
+        try{
+          const res = await fetch('/posts/vote', { method:'POST', headers:{ 'Content-Type':'application/json', ...authHeaders() }, body: JSON.stringify({ target_type:'post', target_id: postId, value: val }) });
+          if(!res.ok){
+            if(res.status === 409){ showToast(t('toast.already_voted'),'info'); return; }
+            throw new Error(await res.text());
+          }
+          showToast(t('toast.vote_recorded'),'ok');
+          if(scoreEl){
+            const cur = parseInt(scoreEl.textContent || '0', 10) || 0;
+            scoreEl.textContent = String(cur + val);
+          }
+          // Disable voting after a successful vote to match one-time vote policy
+          up?.setAttribute('disabled','true');
+          down?.setAttribute('disabled','true');
+          // Tint the selected arrow
+          if(val > 0){ up?.classList.add('voted-up'); up && (up.style.background='rgba(0,255,0,.08)'); }
+          else { down?.classList.add('voted-down'); down && (down.style.background='rgba(255,0,0,.08)'); }
+        }catch(err){ showToast('Vote failed','err'); }
+      };
+      up?.addEventListener('click', () => act(1));
+      down?.addEventListener('click', () => act(-1));
+    }
+
+    // Share and Copy Link actions
+    function bindShareActions(){
+      const shareBtn = document.getElementById('share-post');
+      const copyBtn = document.getElementById('copy-link');
+      shareBtn.addEventListener('click', () => {
+        if(navigator.share){
+          navigator.share({
+            title: document.getElementById('title').textContent,
+            url: window.location.href,
+          }).then(() => showToast(t('toast.shared_success'),'ok')).catch(() => showToast(t('toast.share_failed'),'err'));
+        } else {
+          // Fallback: copy link to clipboard
+          navigator.clipboard.writeText(window.location.href)
+            .then(() => { showToast(t('toast.copy_success'),'ok'); })
+            .catch(() => { showToast(t('toast.copy_failed'),'err'); });
+          showToast('Shared via clipboard', 'info');
+        }
+      });
+      copyBtn.addEventListener('click', () => {
+        navigator.clipboard.writeText(window.location.href).then(() => showToast(t('toast.copy_success'),'ok'), () => showToast(t('toast.copy_failed'),'err'));
+      });
+    }
+
+    // Report content (post or reply)
+    async function reportContent(targetType, targetId){
+      if(!getToken()){ showToast('Login to report','warn'); return; }
+      const reason = prompt('Reason for report (optional):', '');
+      try{
+        const res = await fetch('/moderation/report', {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json', ...authHeaders() },
+          body: JSON.stringify({ target_type: targetType, target_id: targetId, reason })
+        });
+        if(!res.ok){
+          const txt = await res.text();
+          try{ const j = JSON.parse(txt); showToast(String(j?.detail || txt || 'Report failed'), 'err'); }
+          catch{ showToast('Report failed','err'); }
+          return;
+        }
+        showToast('Reported', 'ok');
+      }catch(err){ showToast('Report failed','err'); }
+    }
+
+    // Public tags row
+    async function loadPublicTags(){
+      const wrap = document.getElementById('post-tags-public');
+      if(!wrap) return;
+      try{
+        const res = await fetch(`/posts/${postId}/tags`, { headers:{ ...authHeaders() }});
+        if(!res.ok) throw new Error(await res.text());
+        const rows = await res.json();
+        wrap.innerHTML = rows.length ? rows.map(t => `<span class="badge">#${t.slug}</span>`).join('') : '';
+      }catch(err){ /* ignore */ }
+    }
+
+    // Admin tag controls
+    async function loadPostTags(){
+      const wrap = document.getElementById('post-tags');
+      if(!wrap) return;
+      try{
+        const res = await fetch(`/posts/${postId}/tags`);
+        if(!res.ok) throw new Error(await res.text());
+        const rows = await res.json();
+        wrap.innerHTML = rows.length ? rows.map(t => `
+          <span class="badge" data-tag-id="${t.id}">#${t.slug}
+            <button class="bookmark-toggle" data-target-type="tag" data-target-id="${t.id}" aria-label="Bookmark tag"></button>
+            <button class="btn btn--ghost" data-remove="${t.id}" title="Remove">×</button>
+          </span>
+        `).join(' ') : '<span class="badge">No tags</span>';
+        // hydrate bookmark toggles for tag stars
+        initBookmarkToggles(wrap);
+
+        // enforce client-side 7-tag limit (disable input/button)
+        const count = rows.length;
+        const inp = document.getElementById('attach-slug');
+        const btn = document.getElementById('btn-attach');
+        const hint = document.getElementById('tag-limit-hint');
+        const disable = count >= 7;
+        inp.disabled = disable;
+        btn.disabled = disable;
+        hint.textContent = disable ? 'This post already has 7 tags (maximum).' : 'Up to 7 tags per post.';
+        // detach handlers
+        wrap.querySelectorAll('button[data-remove]').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const tagId = btn.getAttribute('data-remove');
+            try{
+              const res = await fetch(`/posts/${postId}/tags/${tagId}`, { method:'DELETE', headers:{ ...authHeaders() }});
+              if(!res.ok){
+                const txt = await res.text();
+                try {
+                  const j = JSON.parse(txt);
+                  const msg = j?.error?.message || j?.detail || txt || 'Detach failed';
+                  showToast(String(msg), 'err');
+                } catch { showToast('Detach failed', 'err'); }
+                return;
+              }
+              showToast('Tag detached','ok');
+              loadPostTags();
+            }catch(err){ showToast('Detach failed','err'); }
+          });
+        });
+      }catch(err){ wrap.innerHTML = '<span class="badge badge--err">Failed to load tags</span>'; }
+    }
+
+    async function setupAdminTools(){
+      // show tag panel for any logged-in user (attach/detach allowed server-side)
+      try{
+        const r = await fetch('/auth/me', { headers:{ ...authHeaders() }});
+        if(!r.ok) return; // not logged in
+        const panel = document.getElementById('tag-admin');
+        panel.style.display = 'grid';
+        await loadPostTags();
+        const btn = document.getElementById('btn-attach');
+        const inp = document.getElementById('attach-slug');
+        const sugg = document.getElementById('tag-suggestions');
+
+        // attach handler
+        btn.addEventListener('click', async () => {
+          const slug = (inp.value||'').trim().toLowerCase();
+          if(!slug){ showToast('Enter tag slug','warn'); return; }
+          // local limit guard
+          if (btn.disabled) { showToast('Maximum 7 tags per post','warn'); return; }
+          try{
+            const res = await fetch(`/posts/${postId}/tags`, { method:'POST', headers:{ 'Content-Type':'application/json', ...authHeaders() }, body: JSON.stringify({ slug }) });
+            if(!res.ok){
+              // If tag not found, try create-on-the-fly (admins only)
+              if(res.status === 404){
+                // derive a decent label from slug
+                const label = slug.replace(/[-_]+/g,' ').replace(/\s+/g,' ').trim().replace(/\b\w/g, c => c.toUpperCase());
+                try{
+                  const cRes = await fetch('/tags', { method:'POST', headers:{ 'Content-Type':'application/json', ...authHeaders() }, body: JSON.stringify({ label }) });
+                  if(!cRes.ok){
+                    const cTxt = await cRes.text();
+                    try{ const cj = JSON.parse(cTxt); showToast(String(cj?.error?.message || cj?.detail || cTxt || 'Create tag failed'), 'err'); }catch{ showToast('Create tag failed','err'); }
+                    return;
+                  }
+                  // created – try attach again
+                  const a2 = await fetch(`/posts/${postId}/tags`, { method:'POST', headers:{ 'Content-Type':'application/json', ...authHeaders() }, body: JSON.stringify({ slug }) });
+                  if(!a2.ok){
+                    const a2Txt = await a2.text();
+                    try{ const aj = JSON.parse(a2Txt); showToast(String(aj?.error?.message || aj?.detail || a2Txt || 'Attach failed'), 'err'); }catch{ showToast('Attach failed','err'); }
+                    return;
+                  }
+                }catch(e){ showToast('Create/attach failed','err'); return; }
+              } else {
+                const txt = await res.text();
+                try {
+                  const j = JSON.parse(txt);
+                  const msg = j?.error?.message || j?.detail || txt || 'Attach failed';
+                  showToast(String(msg), 'err');
+                } catch { showToast('Attach failed', 'err'); }
+                return;
+              }
+            }
+            inp.value = '';
+            sugg.style.display = 'none';
+            showToast('Tag attached','ok');
+            loadPostTags();
+          }catch(err){ showToast('Attach failed','err'); }
+        });
+
+        // autocomplete: debounce fetch /tags?query=
+        let tmr;
+        function renderSuggestions(items){
+          if(!items || !items.length){ sugg.style.display='none'; return; }
+          sugg.innerHTML = items.map(t => `<button class="btn btn--ghost" data-slug="${t.slug}" style="display:block; width:100%; text-align:left">#${t.slug} — ${t.label}${t.is_banned ? ' (banned)' : ''}</button>`).join('');
+          sugg.style.display = 'block';
+          sugg.querySelectorAll('button[data-slug]').forEach(b => {
+            b.addEventListener('click', () => { inp.value = b.getAttribute('data-slug'); sugg.style.display='none'; });
+          });
+        }
+        inp.addEventListener('input', () => {
+          const q = (inp.value||'').trim();
+          clearTimeout(tmr);
+          if(!q){ sugg.style.display='none'; return; }
+          tmr = setTimeout(async () => {
+            try{
+              const res = await fetch(`/tags?query=${encodeURIComponent(q)}&limit=10`, { headers:{ ...authHeaders() }});
+              if(!res.ok) { sugg.style.display='none'; return; }
+              const rows = await res.json();
+              renderSuggestions(rows);
+            }catch(e){ sugg.style.display='none'; }
+          }, 200);
+        });
+        inp.addEventListener('blur', () => setTimeout(() => { sugg.style.display='none'; }, 150));
+      }catch(e){ /* ignore */ }
+    }
+
+    if (hasValidPostId) {
+      await loadPost();
+      bindPostVotes();
+      // Check if user already voted and disable buttons if so
+      try{
+        const r = await fetch(`/posts/${postId}/my-vote`, { headers:{ ...authHeaders() } });
+        if(r.ok){
+          const mv = await r.json();
+          if(mv && mv.voted){
+            const up = document.getElementById('vote-up-post');
+            const down = document.getElementById('vote-down-post');
+            up?.setAttribute('disabled','true');
+            down?.setAttribute('disabled','true');
+            if(mv.value > 0){ up && (up.style.background='rgba(0,255,0,.08)'); }
+            if(mv.value < 0){ down && (down.style.background='rgba(255,0,0,.08)'); }
+          }
+        }
+      }catch{}
+      bindShareActions();
+      // Bind post reporting
+      const reportBtn = document.getElementById('report-post');
+      if(reportBtn){ reportBtn.addEventListener('click', () => reportContent('post', postId)); }
+      initBookmarkToggles(document);
+      await loadReplies();
+      await loadPublicTags();
+      await setupAdminTools();
+      bindPostPageAIActions(postId);
+    } else {
+      // Hide reply form when invalid post
+      const form = document.getElementById('reply-form');
+      if (form) form.style.display = 'none';
+    }
+  </script>
+</body>
+</html>

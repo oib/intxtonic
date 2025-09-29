@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LangSum • Confirm Email</title>
+  <link rel="stylesheet" href="/src/frontend/css/base.css">
+  <link rel="stylesheet" href="/src/frontend/css/components.css">
+  <link rel="stylesheet" href="/src/frontend/css/layout.css">
+  <style>
+    main { min-height: 100dvh; display: grid; place-items: center; }
+    .confirm-card { max-width: 480px; width: 100%; }
+    .status-icon { font-size: 42px; }
+  </style>
+  <script type="module" src="/src/frontend/js/i18n-runtime.js" data-i18n-init></script>
+</head>
+<body>
+  <main class="container">
+    <section class="card confirm-card" id="view-loading">
+      <div class="status-icon">⏳</div>
+      <h1>Confirming…</h1>
+      <p class="hint">Please wait while we verify your email address.</p>
+    </section>
+
+    <section class="card confirm-card" id="view-success" style="display:none">
+      <div class="status-icon">✅</div>
+      <h1>Email confirmed</h1>
+      <p class="hint">Thanks! Your email address is now verified. You can continue exploring LangSum.</p>
+      <div class="flex" style="gap:8px; flex-wrap:wrap">
+        <a class="btn" href="/dashboard/">Go to dashboard</a>
+        <a class="btn btn--subtle" href="/home">Back to home</a>
+      </div>
+    </section>
+
+    <section class="card confirm-card" id="view-error" style="display:none">
+      <div class="status-icon">⚠️</div>
+      <h1>Confirmation issue</h1>
+      <p id="error-message" class="hint">We couldn’t confirm your email. The link may have expired.</p>
+      <div class="flex" style="gap:8px; flex-wrap:wrap">
+        <button id="btn-resend" class="btn">Resend confirmation</button>
+        <a class="btn btn--subtle" href="/settings">Go to settings</a>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    import { confirmEmail, resendConfirmation } from '/src/frontend/js/auth.js';
+    import { showToast } from '/src/frontend/js/toast.js';
+
+    const viewLoading = document.getElementById('view-loading');
+    const viewSuccess = document.getElementById('view-success');
+    const viewError = document.getElementById('view-error');
+    const errorMessage = document.getElementById('error-message');
+    const btnResend = document.getElementById('btn-resend');
+
+    function show(view){
+      [viewLoading, viewSuccess, viewError].forEach(v => v.style.display = 'none');
+      view.style.display = 'block';
+    }
+
+    const params = new URLSearchParams(location.search);
+    const token = params.get('token');
+
+    async function runConfirmation(){
+      if(!token){
+        errorMessage.textContent = 'Missing confirmation token. Check your link or request a new email.';
+        show(viewError);
+        return;
+      }
+      try{
+        show(viewLoading);
+        const res = await confirmEmail(token);
+        if(res?.ok){
+          show(viewSuccess);
+          return;
+        }
+        errorMessage.textContent = 'We could not confirm your email. Please try resending the confirmation email.';
+        show(viewError);
+      }catch(err){
+        let msg = 'We could not confirm your email. Please try again later.';
+        try{
+          const parsed = JSON.parse(await err?.response?.text?.());
+          msg = parsed?.detail || msg;
+        }catch{}
+        errorMessage.textContent = msg;
+        show(viewError);
+      }
+    }
+
+    btnResend.addEventListener('click', async () => {
+      btnResend.disabled = true;
+      try{
+        await resendConfirmation();
+        showToast('Confirmation email resent', 'ok');
+      }catch(err){
+        showToast('Unable to resend confirmation', 'err');
+      }finally{
+        setTimeout(() => { btnResend.disabled = false; }, 4000);
+      }
+    });
+
+    runConfirmation();
+  </script>
+</body>
+</html>

@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LangSum • Tag</title>
+  <link rel="stylesheet" href="/src/frontend/css/base.css">
+  <link rel="stylesheet" href="/src/frontend/css/components.css">
+  <link rel="stylesheet" href="/src/frontend/css/layout.css">
+</head>
+<body>
+  <header class="site">
+    <div class="inner container flex ai-c jc-b">
+      <div class="brand flex ai-c" style="gap:8px">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#ff7a1a"/></svg>
+        <strong>LangSum</strong>
+      </div>
+      <nav>
+        <a class="btn btn--subtle" href="/home">Home</a>
+        <a class="btn btn--subtle" href="/dashboard">Dashboard</a>
+        <a id="profile-link" class="btn btn--subtle" href="#" style="display:none">Profile</a>
+        <a id="login-link" class="btn btn--subtle" href="/login">Login</a>
+        <button id="logout-btn" class="btn btn--ghost" style="display:none">Logout</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="row">
+      <div class="col-12">
+        <div class="card">
+          <h1 id="title" style="margin:0">#<span id="slug">tag</span></h1>
+          <div id="meta" style="color:var(--tx-1)"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="row">
+      <div class="col-12">
+        <div class="card">
+          <div class="flex ai-c jc-b">
+            <h2>Posts</h2>
+            <div class="flex ai-c" style="gap:8px">
+              <label class="flex ai-c" style="gap:6px">
+                <span class="hide-sm">Sort</span>
+                <select id="sort" class="input" style="max-width:140px">
+                  <option value="newest" selected>Newest</option>
+                  <option value="top">Top</option>
+                </select>
+              </label>
+              <button id="load-more" class="btn btn--subtle">Load more</button>
+            </div>
+          </div>
+          <div id="posts" class="posts"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site">
+    <div class="inner container flex ai-c jc-b">
+      <div> <span id="year"></span> LangSum</div>
+      <div class="hide-sm">Built with Windsurf guidelines</div>
+    </div>
+  </footer>
+
+  <script type="module">
+    import { authHeaders, getToken, clearToken } from '/src/frontend/js/auth.js';
+    import { showToast } from '/src/frontend/js/toast.js';
+
+    document.getElementById('year').textContent = new Date().getFullYear().toString();
+
+    // Guest guard: tags page is for authenticated users only
+    if (!getToken()) { window.location.href = '/login'; }
+
+    // Parse slug from clean URL /tags/{slug}
+    const parts = location.pathname.split('/').filter(Boolean);
+    const slug = parts[1] ? decodeURIComponent(parts[1]) : '';
+    const elSlug = document.getElementById('slug');
+    const elMeta = document.getElementById('meta');
+    const elPosts = document.getElementById('posts');
+    const elLoadMore = document.getElementById('load-more');
+    const elSort = document.getElementById('sort');
+
+    elSlug.textContent = slug || 'tag';
+
+    // Header auth UI (show Profile link when logged in)
+    const loginLink = document.getElementById('login-link');
+    const logoutBtn = document.getElementById('logout-btn');
+    const profileLink = document.getElementById('profile-link');
+    function refreshAuthUI(){
+      const has = !!getToken();
+      loginLink.style.display = has ? 'none' : 'inline-flex';
+      logoutBtn.style.display = has ? 'inline-flex' : 'none';
+      const defaultLabel = profileLink.dataset.defaultLabel || profileLink.textContent || 'Profile';
+      profileLink.dataset.defaultLabel = defaultLabel;
+      profileLink.textContent = defaultLabel;
+      profileLink.style.display = 'none';
+      if (has) {
+        fetch('/auth/me', { headers: { ...authHeaders() }})
+          .then(r => r.ok ? r.json() : null)
+          .then(u => {
+            if (u && u.handle) {
+              profileLink.href = `/user/${encodeURIComponent(u.handle)}`;
+              const label = (u.display_name || u.handle || '').trim();
+              if (label) profileLink.textContent = label;
+              profileLink.style.display = 'inline-flex';
+            }
+          })
+          .catch(() => {});
+      }
+    }
+    logoutBtn.addEventListener('click', async () => {
+      try { await fetch('/auth/logout', { method: 'POST', headers: { ...authHeaders() } }); } catch {}
+      clearToken();
+      showToast('Signed out','ok');
+      window.location.href = '/home';
+    });
+    refreshAuthUI();
+
+    let offset = 0;
+    const limit = 10;
+
+    async function loadPosts(append=false){
+      if(!slug){ elPosts.innerHTML = '<div class="badge">Missing tag</div>'; return; }
+      try{
+        const params = new URLSearchParams({ limit:String(limit), offset:String(offset), sort:elSort.value });
+        // posts endpoint accepts tag slugs in array; use single slug here
+        const res = await fetch(`/posts?${params.toString()}&tag=${encodeURIComponent(slug)}`, { headers: { ...authHeaders() }});
+        if(!res.ok) throw new Error(await res.text());
+        const page = await res.json();
+        const items = page.items || [];
+        const markup = items.length ? items.map(p => `
+          <article class="post">
+            <h3><a href="/post/${p.id}">${p.title}</a></h3>
+            <div class="meta">by ${p.author || 'unknown'} · ${p.created_at ? new Date(p.created_at).toLocaleString() : ''} · score ${p.score}</div>
+            <div class="flex" style="gap:6px; flex-wrap:wrap; margin:.5rem 0;">
+              ${(Array.isArray(p.tags) ? p.tags : []).map(t => `<a class="badge" href="/tags/${t.slug}">#${t.slug}</a>`).join('')}
+            </div>
+            <p>${(p.body_md || '').slice(0, 220)}${(p.body_md || '').length > 220 ? '…' : ''}</p>
+          </article>
+        `).join('') : '';
+        if(append){ elPosts.insertAdjacentHTML('beforeend', markup); }
+        else { elPosts.innerHTML = markup || '<div class="badge">No posts for this tag</div>'; }
+        elMeta.textContent = `${page.total ?? items.length} post(s)`;
+        elLoadMore.disabled = (offset + items.length) >= (page.total ?? (offset + items.length));
+      }catch(err){ elPosts.innerHTML = '<div class="badge badge--err">Failed to load posts</div>'; }
+    }
+
+    elLoadMore.addEventListener('click', () => { offset += limit; loadPosts(true); });
+    elSort.addEventListener('change', () => { offset = 0; loadPosts(false); });
+
+    await loadPosts(false);
+  </script>
+</body>
+</html>

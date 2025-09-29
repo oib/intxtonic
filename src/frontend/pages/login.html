@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LangSum • Login</title>
+  <link rel="stylesheet" href="/src/frontend/css/base.css">
+  <link rel="stylesheet" href="/src/frontend/css/components.css">
+  <link rel="stylesheet" href="/src/frontend/css/layout.css">
+  <link rel="stylesheet" href="/src/frontend/css/pages/login.css">
+</head>
+<body>
+  <main class="container" style="min-height:100dvh; display:grid; place-items:center;">
+    <section class="card" style="max-width:420px; width:100%;">
+      <h1 class="mb-6">Sign in</h1>
+      <form id="login-form" class="grid" style="gap:16px">
+        <label>
+          <div class="mb-6">Handle or email</div>
+          <input id="inp-user" class="input" type="text" placeholder="user1 or user@example.com" required>
+        </label>
+        <label>
+          <div class="mb-6">Password</div>
+          <input id="inp-pass" class="input" type="password" placeholder="••••••••" required>
+        </label>
+        <button class="btn" type="submit">Login</button>
+        <div id="msg" class="badge" style="display:none"></div>
+      </form>
+      <p class="hint" style="margin-top:12px; color:var(--tx-1)">Need an account? <a href="/register" class="link">Sign up</a>.</p>
+      <!-- No navigation for guests on the login page -->
+    </section>
+  </main>
+
+  <script type="module">
+    import { login } from '/src/frontend/js/auth.js';
+    import { showToast } from '/src/frontend/js/toast.js';
+
+    const form = document.getElementById('login-form');
+    const msg = document.getElementById('msg');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      msg.style.display = 'none';
+      const user = document.getElementById('inp-user').value.trim();
+      const pass = document.getElementById('inp-pass').value;
+      try {
+        await login(user, pass);
+        showToast('Signed in', 'ok');
+        window.location.href = '/home';
+      } catch (err) {
+        msg.textContent = 'Login failed';
+        msg.style.display = 'inline-block';
+        showToast('Invalid credentials', 'err');
+      }
+    });
+  </script>
+</body>
+</html>

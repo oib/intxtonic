@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LangSum • Admin Users</title>
+  <link rel="stylesheet" href="/src/frontend/css/base.css">
+  <link rel="stylesheet" href="/src/frontend/css/components.css">
+  <link rel="stylesheet" href="/src/frontend/css/layout.css">
+</head>
+<body>
+  <header class="site">
+    <div class="inner container nav-3">
+      <div class="left flex ai-c" style="gap:8px">
+        <a class="btn btn--subtle" href="/admin">← Back to admin</a>
+      </div>
+      <nav class="flex ai-c" style="gap:8px">
+        <a class="btn btn--subtle" href="/dashboard">Dashboard</a>
+        <a id="login-link" class="btn btn--subtle" href="/login">Login</a>
+        <button id="logout-btn" class="btn btn--ghost" style="display:none">Logout</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="row">
+      <div class="col-12">
+        <div class="card">
+          <h1>User Tag Access</h1>
+          <p class="hint" style="color:var(--tx-1)">Grant or revoke admin-created tags for individual users. Only admins can access this page.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="row">
+      <div class="col-12">
+        <div class="card">
+          <form id="lookup-form" class="flex" style="gap:8px; flex-wrap:wrap; margin-bottom:16px">
+            <input id="handle-input" class="input" placeholder="User handle (e.g. user1)" autocomplete="off" required style="max-width:240px">
+            <button class="btn" type="submit">Load user</button>
+          </form>
+          <div id="status-msg" class="badge" style="display:none"></div>
+
+          <section id="assignment-panel" style="display:none; margin-top:16px">
+            <h2 id="user-heading" style="margin:0 0 12px 0"></h2>
+            <form id="assign-form" class="flex" style="gap:8px; flex-wrap:wrap; margin-bottom:16px">
+              <select id="tag-select" class="input" required style="min-width:220px"></select>
+              <button class="btn" type="submit">Add tag</button>
+            </form>
+            <div id="assign-msg" class="badge" style="display:none"></div>
+            <div id="user-tag-list" class="tags-list"></div>
+          </section>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site">
+    <div class="inner container flex ai-c jc-b">
+      <div><span id="year"></span> LangSum</div>
+      <div class="hide-sm">Built with Windsurf guidelines</div>
+    </div>
+  </footer>
+
+  <script type="module">
+    import { authHeaders, getToken, clearToken } from '/src/frontend/js/auth.js';
+    import { showToast } from '/src/frontend/js/toast.js';
+
+    document.getElementById('year').textContent = new Date().getFullYear().toString();
+
+    const loginLink = document.getElementById('login-link');
+    const logoutBtn = document.getElementById('logout-btn');
+    function refreshAuthUI(){
+      const has = !!getToken();
+      loginLink.style.display = has ? 'none' : 'inline-flex';
+      logoutBtn.style.display = has ? 'inline-flex' : 'none';
+    }
+    logoutBtn.addEventListener('click', async () => {
+      try { await fetch('/auth/logout', { method: 'POST', headers: { ...authHeaders() } }); } catch {}
+      clearToken();
+      showToast('Signed out', 'ok');
+      window.location.href = '/home';
+    });
+
+    const lookupForm = document.getElementById('lookup-form');
+    const handleInput = document.getElementById('handle-input');
+    const statusMsg = document.getElementById('status-msg');
+    const assignPanel = document.getElementById('assignment-panel');
+    const assignForm = document.getElementById('assign-form');
+    const tagSelect = document.getElementById('tag-select');
+    const assignMsg = document.getElementById('assign-msg');
+    const userHeading = document.getElementById('user-heading');
+    const userTagList = document.getElementById('user-tag-list');
+
+    let isAdmin = false;
+    let currentHandle = '';
+    let cachedTags = [];
+
+    function setStatus(message, tone='info'){
+      statusMsg.textContent = message;
+      statusMsg.className = `badge${tone === 'err' ? ' badge--err' : tone === 'warn' ? ' badge--warn' : ''}`;
+      statusMsg.style.display = 'inline-block';
+    }
+
+    function hideStatus(){ statusMsg.style.display = 'none'; }
+
+    function setAssignStatus(message, tone='info'){
+      assignMsg.textContent = message;
+      assignMsg.className = `badge${tone === 'err' ? ' badge--err' : tone === 'warn' ? ' badge--warn' : ''}`;
+      assignMsg.style.display = 'inline-block';
+    }
+
+    function hideAssignStatus(){ assignMsg.style.display = 'none'; }
+
+    async function checkAdminAccess(){
+      if (!getToken()) {
+        window.location.href = '/login';
+        return false;
+      }
+      try{
+        const res = await fetch('/auth/me', { headers:{ ...authHeaders() } });
+        if(!res.ok){ window.location.href = '/login'; return false; }
+        const me = await res.json();
+        if (!me.is_admin && !(Array.isArray(me.roles) && me.roles.includes('moderator'))){
+          showToast('Admin access required', 'err');
+          window.location.href = '/admin';
+          return false;
+        }
+        isAdmin = !!me.is_admin;
+        return true;
+      }catch(err){
+        console.error('checkAdminAccess failed', err);
+        showToast('Unable to verify access', 'err');
+        return false;
+      }
+    }
+
+    async function loadTags(){
+      tagSelect.innerHTML = '<option value="">Loading…</option>';
+      try{
+        const res = await fetch('/tags?limit=500', { headers:{ ...authHeaders() } });
+        if(!res.ok) throw new Error(await res.text());
+        cachedTags = await res.json();
+        if(!Array.isArray(cachedTags)) cachedTags = [];
+        if(!cachedTags.length){
+          tagSelect.innerHTML = '<option value="">No tags available</option>';
+          return;
+        }
+        tagSelect.innerHTML = cachedTags.map(t => `<option value="${t.id}">#${t.slug} — ${t.label || ''}</option>`).join('');
+      }catch(err){
+        console.error('loadTags failed', err);
+        tagSelect.innerHTML = '<option value="">Failed to load tags</option>';
+        showToast('Failed to load tags', 'err');
+      }
+    }
+
+    async function loadAssignments(handle){
+      if(!handle){
+        assignPanel.style.display = 'none';
+        return;
+      }
+      userTagList.innerHTML = '<div class="badge">Loading…</div>';
+      hideAssignStatus();
+      try{
+        const res = await fetch(`/tags/visibility/users/${encodeURIComponent(handle)}`, { headers:{ ...authHeaders() } });
+        if(res.status === 404){
+          userTagList.innerHTML = '<div class="badge badge--warn">User not found</div>';
+          assignPanel.style.display = 'none';
+          return;
+        }
+        if(!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        currentHandle = data.handle;
+        userHeading.textContent = `@${data.handle} (${data.account_id})`;
+        const items = Array.isArray(data.tags) ? data.tags : [];
+        const html = items.length ? items.map(item => `
+          <div class="flex ai-c jc-b" style="padding:6px 0; border-bottom:1px solid rgba(185,236,255,.12)">
+            <div><span class="badge">#${item.slug}</span> ${item.label || ''}</div>
+            <button class="btn btn--ghost" data-tag-id="${item.tag_id}">Remove</button>
+          </div>
+        `).join('') : '<div class="badge">No tag overrides</div>';
+        userTagList.innerHTML = html;
+        assignPanel.style.display = 'block';
+        userTagList.querySelectorAll('button[data-tag-id]').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const tagId = btn.dataset.tagId;
+            try{
+              const resDel = await fetch(`/tags/${encodeURIComponent(tagId)}/visibility/users/${encodeURIComponent(currentHandle)}`, {
+                method:'DELETE',
+                headers:{ ...authHeaders() },
+              });
+              if(!resDel.ok) throw new Error(await resDel.text());
+              showToast('Removed tag access', 'ok');
+              await loadAssignments(currentHandle);
+            }catch(err){
+              console.error('remove tag failed', err);
+              showToast('Failed to remove tag', 'err');
+            }
+          });
+        });
+      }catch(err){
+        console.error('loadAssignments failed', err);
+        userTagList.innerHTML = '<div class="badge badge--err">Failed to load assignments</div>';
+      }
+    }
+
+    lookupForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideStatus();
+      const handle = handleInput.value.trim();
+      if(!handle){
+        setStatus('Handle is required', 'warn');
+        assignPanel.style.display = 'none';
+        return;
+      }
+      await loadAssignments(handle);
+    });
+
+    assignForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideAssignStatus();
+      if(!currentHandle){
+        setAssignStatus('Load a user first', 'warn');
+        return;
+      }
+      const tagId = tagSelect.value;
+      if(!tagId){
+        setAssignStatus('Select a tag to add', 'warn');
+        return;
+      }
+      try{
+        const res = await fetch(`/tags/${encodeURIComponent(tagId)}/visibility/users`, {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json', ...authHeaders() },
+          body: JSON.stringify({ handle: currentHandle })
+        });
+        if(res.status === 404){
+          const msg = await res.text();
+          setAssignStatus(msg.includes('User not found') ? 'User not found' : 'Tag not found', 'warn');
+          return;
+        }
+        if(!res.ok) throw new Error(await res.text());
+        showToast('Tag assigned', 'ok');
+        await loadAssignments(currentHandle);
+      }catch(err){
+        console.error('assign failed', err);
+        setAssignStatus('Failed to assign tag', 'err');
+      }
+    });
+
+    (async () => {
+      refreshAuthUI();
+      const ok = await checkAdminAccess();
+      if(!ok) return;
+      await loadTags();
+      const initialHandle = handleInput.value.trim();
+      if(initialHandle) await loadAssignments(initialHandle);
+    })();
+  </script>
+</body>
+</html>

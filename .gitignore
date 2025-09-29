@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.sqlite3
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Node / frontend artifacts
+node_modules/
+.dist/
+.build/
+coverage/
+
+# Editor files
+*.swp
+*.swo
+.DS_Store
+.idea/
+.vscode/
+
+# Local environment
+.env
+*.env.local
+
+# Uploads and runtime data
+uploads/
+*.db
+
+# pytest cache
+.pytest_cache/
+
+# Coverage and test reports
+*.coverage
+coverage.xml
+pytest-report.html
+
+# Build artifacts
+build/
+dist/
+
+# Misc
+*.bak
+*.tmp

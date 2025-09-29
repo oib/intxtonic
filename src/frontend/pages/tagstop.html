@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LangSum • Top Tags</title>
+  <link rel="stylesheet" href="/src/frontend/css/base.css">
+  <link rel="stylesheet" href="/src/frontend/css/components.css">
+  <link rel="stylesheet" href="/src/frontend/css/layout.css">
+  <link rel="stylesheet" href="/src/frontend/css/pages/home.css">
+  <style>
+    .tagstop-header {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:1rem;
+      flex-wrap:wrap;
+    }
+    .tagstop-table {
+      width:100%;
+      border-collapse:collapse;
+    }
+    .tagstop-table th,
+    .tagstop-table td {
+      padding:0.75rem 0.5rem;
+      border-bottom:1px solid rgba(185,236,255,.12);
+      text-align:left;
+    }
+    .tagstop-table th {
+      font-size:0.9rem;
+      text-transform:uppercase;
+      letter-spacing:0.04em;
+      color:var(--tx-2);
+    }
+    .tagstop-table tbody tr:hover {
+      background:rgba(255,255,255,0.04);
+    }
+    .tagstop-controls {
+      display:flex;
+      gap:0.75rem;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    .tagstop-empty {
+      padding:1rem;
+      text-align:center;
+      color:var(--tx-2);
+    }
+  </style>
+  <script type="module" src="/src/frontend/js/i18n-runtime.js" data-i18n-init></script>
+</head>
+<body>
+  <header class="site">
+    <div class="inner container nav-3">
+      <div class="left flex ai-c" style="gap:8px">
+        <a class="btn btn--subtle" href="/dashboard/" data-i18n="nav.dashboard">Dashboard</a>
+      </div>
+      <nav class="flex ai-c" style="gap:8px">
+        <a class="btn btn--subtle" href="/" data-i18n="nav.home">Home</a>
+        <a id="profile-link" class="btn btn--subtle" href="#" style="display:none" data-i18n="nav.profile">Profile</a>
+        <button id="logout-btn" class="btn btn--ghost" data-i18n="nav.logout">Logout</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <div class="tagstop-header">
+        <div>
+          <h1 style="margin:0" data-i18n="tags.top_title">Top Tags</h1>
+          <p class="hint" data-i18n="tags.top_hint">Explore the most used tags across LangSum.</p>
+        </div>
+        <div class="tagstop-controls">
+          <input id="search" class="input" type="search" placeholder="Search tags..." style="max-width:220px">
+          <select id="limit" class="input" style="max-width:120px">
+            <option value="25">Top 25</option>
+            <option value="50" selected>Top 50</option>
+            <option value="100">Top 100</option>
+          </select>
+        </div>
+      </div>
+      <div class="hint" id="summary" style="margin-top:0.5rem"></div>
+      <div id="table-wrapper" style="margin-top:1.5rem; overflow-x:auto">
+        <table class="tagstop-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Tag</th>
+              <th>Label</th>
+              <th>Usage</th>
+            </tr>
+          </thead>
+          <tbody id="tags-body">
+            <tr><td colspan="4" class="tagstop-empty">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site">
+    <div class="inner container flex ai-c jc-b">
+      <div> <span id="year"></span> LangSum</div>
+      <div class="hide-sm">Built with Windsurf guidelines</div>
+    </div>
+  </footer>
+
+  <script type="module">
+    import { authHeaders, getToken, clearToken } from '/src/frontend/js/auth.js';
+    import { showToast } from '/src/frontend/js/toast.js';
+
+    document.getElementById('year').textContent = new Date().getFullYear().toString();
+
+    const profileLink = document.getElementById('profile-link');
+    const logoutBtn = document.getElementById('logout-btn');
+    const tagsBody = document.getElementById('tags-body');
+    const summaryEl = document.getElementById('summary');
+    const searchInput = document.getElementById('search');
+    const limitSelect = document.getElementById('limit');
+
+    if (profileLink) {
+      const defaultLabel = profileLink.dataset.defaultLabel || profileLink.textContent || 'Profile';
+      profileLink.dataset.defaultLabel = defaultLabel;
+      profileLink.textContent = defaultLabel;
+      profileLink.style.display = 'none';
+    }
+
+    logoutBtn.addEventListener('click', async () => {
+      try { await fetch('/auth/logout', { method: 'POST', headers: { ...authHeaders() } }); } catch {}
+      clearToken();
+      showToast('Signed out','ok');
+      window.location.href = '/';
+    });
+
+    async function ensureAuthenticated(){
+      const token = getToken();
+      if(!token){ window.location.href = '/login/'; return null; }
+      try{
+        const res = await fetch('/auth/me', { headers: { ...authHeaders() } });
+        if(res.status === 401){
+          clearToken();
+          window.location.href = '/login/';
+          return null;
+        }
+        if(!res.ok) throw new Error('Failed profile');
+        const user = await res.json();
+        if (profileLink) {
+          profileLink.style.display = 'inline-flex';
+          profileLink.href = `/user/${encodeURIComponent(user.handle)}`;
+          const label = (user.display_name || user.handle || '').trim();
+          if (label) profileLink.textContent = label;
+        }
+        return user;
+      }catch(err){
+        showToast('Failed to load profile','err');
+        window.location.href = '/login/';
+        return null;
+      }
+    }
+
+    let tagsCache = [];
+
+    function renderTags(){
+      const q = (searchInput.value || '').trim().toLowerCase();
+      const filtered = q ? tagsCache.filter(t => t.slug.toLowerCase().includes(q) || (t.label || '').toLowerCase().includes(q)) : tagsCache;
+      if(!filtered.length){
+        tagsBody.innerHTML = '<tr><td colspan="4" class="tagstop-empty">No tags match your search yet.</td></tr>';
+        summaryEl.textContent = q ? `Showing 0 results for "${q}"` : `Loaded ${tagsCache.length} tags`;
+        return;
+      }
+      tagsBody.innerHTML = filtered.map((tag, idx) => `
+        <tr>
+          <td>${idx + 1}</td>
+          <td><a class="link" href="/tags/${encodeURIComponent(tag.slug)}">#${tag.slug}</a></td>
+          <td>${tag.label || ''}</td>
+          <td>${tag.usage_count}</td>
+        </tr>
+      `).join('');
+      summaryEl.textContent = q ? `Showing ${filtered.length} of ${tagsCache.length} tags` : `Showing top ${tagsCache.length} tags by usage`;
+    }
+
+    async function loadTopTags(){
+      tagsBody.innerHTML = '<tr><td colspan="4" class="tagstop-empty">Loading…</td></tr>';
+      summaryEl.textContent = '';
+      try{
+        const limit = parseInt(limitSelect.value, 10) || 50;
+        const res = await fetch(`/tags/list-top?limit=${limit}`, { headers: { ...authHeaders() } });
+        if(!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        tagsCache = Array.isArray(data) ? data : [];
+        if(!tagsCache.length){
+          tagsBody.innerHTML = '<tr><td colspan="4" class="tagstop-empty">No tags yet. Start posting to generate some!</td></tr>';
+          summaryEl.textContent = 'No tags available';
+          return;
+        }
+        renderTags();
+      }catch(err){
+        console.error('Failed to load top tags', err);
+        tagsBody.innerHTML = '<tr><td colspan="4" class="tagstop-empty">Unable to load tags right now.</td></tr>';
+        summaryEl.textContent = '';
+        showToast('Failed to load tags','err');
+      }
+    }
+
+    searchInput.addEventListener('input', () => renderTags());
+    limitSelect.addEventListener('change', () => loadTopTags());
+
+    (async () => {
+      const user = await ensureAuthenticated();
+      if(!user) return;
+      if (profileLink) {
+        profileLink.textContent = user.display_name || profileLink.dataset.defaultLabel;
+      }
+      await loadTopTags();
+    })();
+  </script>
+</body>
+</html>

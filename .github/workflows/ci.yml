@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: langsum
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: langsum
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U langsum" 
+          --health-interval 10s 
+          --health-timeout 5s 
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install -U pip
+          pip install -r requirements.txt
+          pip install pytest-cov
+
+      - name: Apply DB schema and seeds
+        env:
+          PGPASSWORD: password
+        run: |
+          . .venv/bin/activate
+          psql -h localhost -p 5432 -U langsum -d langsum -v ON_ERROR_STOP=1 -f src/backend/app/db/schema.sql
+          psql -h localhost -p 5432 -U langsum -d langsum -v ON_ERROR_STOP=1 -f src/backend/app/db/seeds/initial.sql
+
+      - name: Run tests with coverage
+        env:
+          APP_ENV: ci
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: langsum
+          DB_USER: langsum
+          DB_PASSWORD: password
+        run: |
+          . .venv/bin/activate
+          pytest --cov=src/backend/app --cov-report=xml -q
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-report
+          path: coverage.xml
+
+      - name: Parse coverage report
+        id: coverage
+        run: |
+          . .venv/bin/activate
+          coverage_total=$(python -c "import xml.etree.ElementTree as ET; tree = ET.parse('coverage.xml'); root = tree.getroot(); print(root.attrib['line-rate'])")
+          echo "coverage=$coverage_total" >> $GITHUB_OUTPUT
+
+      - name: Comment coverage on PR
+        if: github.event_name == 'pull_request'
+        uses: thollander/actions-comment-pull-request@v2
+        with:
+          message: |
+            Coverage Report:
+            Total Coverage: ${{ steps.coverage.outputs.coverage }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

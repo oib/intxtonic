@@ -1,0 +1,34 @@
+/* Post page styles */
+
+main.container {
+  max-width: 860px;
+}
+
+.post .meta {
+  color: var(--tx-1);
+  font-size: 0.9rem;
+}
+
+#post-tags-public { margin-top: 4px; }
+
+#reply-form { margin-top: 12px; }
+
+.replies .badge { margin-right: 4px; }
+
+/* Vote tint states */
+#vote-up-post.voted-up {
+  background: rgba(0, 255, 0, 0.08);
+  border-color: rgba(0, 255, 0, 0.18);
+}
+
+#vote-down-post.voted-down {
+  background: rgba(255, 0, 0, 0.08);
+  border-color: rgba(255, 0, 0, 0.18);
+}
+
+/* Disabled state consistency */
+#vote-up-post[disabled],
+#vote-down-post[disabled]{
+  opacity: 0.6;
+  cursor: not-allowed;
+}

@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LangSum • Admin</title>
+  <style>
+    /* Normalize heading sizes/margins for sectioned headings to silence browser warnings */
+    h1 { font-size: 1.75rem; margin: 0 0 0.5rem 0; }
+    h2 { font-size: 1.25rem; margin: 0 0 0.5rem 0; }
+  </style>
+  <link rel="preload" href="/src/frontend/css/base.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="/src/frontend/css/base.css"></noscript>
+  <link rel="preload" href="/src/frontend/css/components.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="/src/frontend/css/components.css"></noscript>
+  <link rel="preload" href="/src/frontend/css/layout.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="/src/frontend/css/layout.css"></noscript>
+  <script type="module" src="/src/frontend/js/i18n-runtime.js" data-i18n-init></script>
+</head>
+<body>
+  <header class="site">
+    <div class="inner container nav-3">
+      <div class="left flex ai-c" style="gap:8px">
+        <a id="i18n-link" class="btn btn--subtle" href="/admin/i18n" style="display:none" data-i18n="admin.i18n">Translations</a>
+      </div>
+      <nav class="flex ai-c" style="gap:8px">
+        <a class="btn btn--subtle" href="/dashboard" data-i18n="nav.dashboard">Dashboard</a>
+        <a id="login-link" class="btn btn--subtle" href="/login" data-i18n="nav.login">Login</a>
+        <button id="logout-btn" class="btn btn--ghost" style="display:none" data-i18n="nav.logout">Logout</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="row">
+      <div class="col-12">
+        <div class="card">
+          <h1 data-i18n="admin.panel">Admin Panel</h1>
+          <p style="color:var(--tx-1)" data-i18n="admin.panel_hint">Manage moderation queues and tags. Restricted to admin and moderator roles.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="row">
+      <div class="col-6">
+        <div class="card">
+          <h2 data-i18n="admin.moderation">Moderation Queues</h2>
+          <div class="tabs">
+            <button id="tab-reports" class="tab active" data-tab="reports" data-i18n="admin.reports">Reports</button>
+            <button id="tab-new-content" class="tab" data-tab="new-content" data-i18n="admin.new_content">New Content</button>
+          </div>
+          <div id="reports" class="queue-content" style="display:block;">
+            <h3 data-i18n="admin.reports">Reports</h3>
+            <p class="badge">UI stub for reported content. Click 'Load more' to simulate fetching reports.</p>
+            <div id="reports-list"></div>
+            <div class="flex ai-c jc-b mt-4">
+              <div></div>
+              <button id="load-more-reports" class="btn btn--subtle" data-i18n="admin.load_more">Load more</button>
+            </div>
+          </div>
+          <div id="new-content" class="queue-content" style="display:none;">
+            <h3 data-i18n="admin.new_content">New Content</h3>
+            <p class="badge">UI stub for new posts and replies. Click 'Load more' to simulate fetching new items.</p>
+            <div id="new-content-list"></div>
+            <div class="flex ai-c jc-b mt-4">
+              <div></div>
+              <button id="load-more-new-content" class="btn btn--subtle" data-i18n="admin.load_more">Load more</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12">
+        <div class="card">
+          <div class="flex ai-c jc-b" style="margin-bottom:12px">
+            <h2 data-i18n="admin.tags" style="margin:0">Tag Management</h2>
+            <a class="btn btn--subtle" href="/admin/users">User access</a>
+          </div>
+          <div class="flex ai-c" style="gap:8px; margin-bottom:12px">
+            <input id="q-tag-admin" class="input" placeholder="Search tags..." data-i18n-placeholder="home.search_tags" style="max-width:240px">
+            <button id="btn-search-tags" class="btn btn--subtle" data-i18n="dashboard.search">Search</button>
+          </div>
+          <div id="tag-create-row" class="flex ai-c" style="gap:8px; margin-bottom:16px;">
+            <input id="new-tag" class="input" placeholder="New tag label" data-i18n-placeholder="admin.new_tag_placeholder" style="max-width:240px">
+            <button id="btn-create-tag" class="btn" data-i18n="admin.create_tag">Create Tag</button>
+          </div>
+          <div id="tags-list" class="tags-list"></div>
+          <div class="card" style="margin-top:24px">
+            <h3>Tag Visibility</h3>
+            <div class="flex ai-c" style="gap:8px; margin-bottom:12px">
+              <input id="q-tag-visibility" class="input" placeholder="Filter tags" style="max-width:240px">
+              <button id="btn-search-visibility" class="btn btn--subtle">Filter</button>
+            </div>
+            <div id="tag-visibility" class="tags-list"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site">
+    <div class="inner container flex ai-c jc-b">
+      <div> <span id="year"></span> LangSum</div>
+      <div class="hide-sm">Built with Windsurf guidelines</div>
+    </div>
+  </footer>
+
+  <script type="module">
+    import { authHeaders, getToken, clearToken } from '/src/frontend/js/auth.js';
+    import { showToast } from '/src/frontend/js/toast.js';
+    import { t } from '/src/frontend/js/i18n-runtime.js';
+
+    document.getElementById('year').textContent = new Date().getFullYear().toString();
+
+    // Auth UI
+    const loginLink = document.getElementById('login-link');
+    const logoutBtn = document.getElementById('logout-btn');
+    function refreshAuthUI(){ const has = !!getToken(); loginLink.style.display = has?'none':'inline-flex'; logoutBtn.style.display = has?'inline-flex':'none'; }
+    logoutBtn.addEventListener('click', async () => {
+      try { await fetch('/auth/logout', { method: 'POST', headers: { ...authHeaders() } }); } catch {}
+      clearToken();
+      showToast(t('toast.signed_out'),'ok');
+      window.location.href = '/home';
+    });
+    refreshAuthUI();
+
+    // Tab switching for moderation queues
+    const elTabReports = document.getElementById('tab-reports');
+    const elTabNewContent = document.getElementById('tab-new-content');
+    const elReports = document.getElementById('reports');
+    const elNewContent = document.getElementById('new-content');
+
+    function switchTab(tab) {
+      elTabReports.classList.toggle('active', tab === 'reports');
+      elTabNewContent.classList.toggle('active', tab === 'new-content');
+      elReports.style.display = tab === 'reports' ? 'block' : 'none';
+      elNewContent.style.display = tab === 'new-content' ? 'block' : 'none';
+      // Future: Load content for the selected tab if needed
+    }
+
+    function normalizeHandleInput(value = '') {
+      const trimmed = value.trim();
+      if (!trimmed) return '';
+      return trimmed.startsWith('@') ? trimmed.slice(1) : trimmed;
+    }
+
+    function setTagStatusMessage(tagId, message, tone = 'info') {
+      const statusEl = elTagVisibility.querySelector(`.tag-vis-status[data-tag-id="${tagId}"]`);
+      if (!statusEl) return;
+      statusEl.textContent = message;
+      const baseClass = 'tag-vis-status badge';
+      const toneClass = tone === 'err' ? ' badge--err' : tone === 'warn' ? ' badge--warn' : '';
+      statusEl.className = baseClass + toneClass;
+      statusEl.style.display = message ? 'inline-block' : 'none';
+    }
+
+    function clearTagStatusMessage(tagId) {
+      setTagStatusMessage(tagId, '');
+    }
+
+    function renderTagVisibility(rows){
+      const html = rows.map(t => {
+        const rolesHtml = t.roles.length
+          ? t.roles.map(r => `<span class="badge">${r.name}</span>`).join(' ')
+          : '<span class="badge">none</span>';
+        const usersHtml = t.users.length
+          ? t.users.map(u => `
+              <div class="flex ai-c" style="gap:6px">
+                <span class="badge">@${u.handle}</span>
+                <button type="button" class="btn btn--ghost tag-vis-remove-user" data-tag-id="${t.tag_id}" data-handle="${u.handle}">Remove</button>
+              </div>
+            `).join('')
+          : '<div class="badge">No user overrides</div>';
+        return `
+          <div class="tag-vis-row" data-tag-id="${t.tag_id}" data-tag-slug="${t.slug}" style="padding:12px 0; border-bottom:1px solid rgba(185,236,255,.12)">
+            <div class="flex ai-c jc-b" style="gap:16px; flex-wrap:wrap">
+              <div class="flex ai-c" style="gap:8px">
+                <span class="badge">#${t.slug}</span>
+                <span>${t.label || ''}</span>
+              </div>
+              <div class="flex ai-c" style="gap:8px; flex-wrap:wrap">
+                <strong>Roles</strong>
+                <div class="flex ai-c" style="gap:6px; flex-wrap:wrap">${rolesHtml}</div>
+              </div>
+            </div>
+            <div class="tag-vis-users" style="margin-top:12px">
+              <div><strong>Users</strong></div>
+              <div class="tag-vis-user-list" style="margin-top:6px; display:flex; flex-direction:column; gap:6px">
+                ${usersHtml}
+              </div>
+              <form class="tag-vis-add-user flex" data-tag-id="${t.tag_id}" style="gap:8px; flex-wrap:wrap; margin-top:12px">
+                <input name="handle" class="input" placeholder="Add @handle" autocomplete="off" style="max-width:220px">
+                <button class="btn btn--subtle" type="submit">Grant access</button>
+              </form>
+              <div class="tag-vis-status badge" data-tag-id="${t.tag_id}" style="display:none; margin-top:8px"></div>
+            </div>
+          </div>
+        `;
+      }).join('');
+      elTagVisibility.innerHTML = html || '<div class="badge">No visibility overrides</div>';
+
+      elTagVisibility.querySelectorAll('.tag-vis-add-user').forEach(form => {
+        form.addEventListener('submit', handleTagUserGrant);
+      });
+      elTagVisibility.querySelectorAll('.tag-vis-remove-user').forEach(btn => {
+        btn.addEventListener('click', handleTagUserRemoval);
+      });
+    }
+
+    async function handleTagUserGrant(event){
+      event.preventDefault();
+      const form = event.currentTarget;
+      const tagId = form.getAttribute('data-tag-id');
+      if (!tagId) return;
+      const input = form.querySelector('input[name="handle"]');
+      const submitBtn = form.querySelector('button[type="submit"]');
+      const slug = form.closest('.tag-vis-row')?.getAttribute('data-tag-slug') || '';
+      const handle = normalizeHandleInput(input?.value || '');
+      if (!handle) {
+        setTagStatusMessage(tagId, 'Enter a user handle', 'warn');
+        return;
+      }
+      clearTagStatusMessage(tagId);
+      setTagStatusMessage(tagId, `Granting #${slug} to @${handle}…`);
+      if (submitBtn) submitBtn.disabled = true;
+      try {
+        const res = await fetch(`/tags/${encodeURIComponent(tagId)}/visibility/users`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
+          body: JSON.stringify({ handle }),
+        });
+        if (res.status === 404) {
+          const text = await res.text();
+          if (text.includes('Tag not found')) {
+            setTagStatusMessage(tagId, 'Tag no longer exists', 'err');
+          } else {
+            setTagStatusMessage(tagId, 'User not found', 'warn');
+          }
+          return;
+        }
+        if (res.status === 400) {
+          const text = await res.text();
+          setTagStatusMessage(tagId, text || 'Invalid handle', 'warn');
+          return;
+        }
+        if (!res.ok) {
+          throw new Error(await res.text());
+        }
+        showToast(`Granted #${slug} to @${handle}`, 'ok');
+        if (input) input.value = '';
+        await loadTagVisibility(lastVisibilityQuery);
+      } catch (err) {
+        console.error('assign tag failed', err);
+        setTagStatusMessage(tagId, 'Failed to grant access', 'err');
+      } finally {
+        if (submitBtn) submitBtn.disabled = false;
+      }
+    }
+
+    async function handleTagUserRemoval(event){
+      event.preventDefault();
+      const btn = event.currentTarget;
+      const tagId = btn.getAttribute('data-tag-id');
+      const handle = btn.getAttribute('data-handle');
+      if (!tagId || !handle) return;
+      const slug = btn.closest('.tag-vis-row')?.getAttribute('data-tag-slug') || '';
+      setTagStatusMessage(tagId, `Removing @${handle}…`);
+      btn.disabled = true;
+      try {
+        const res = await fetch(`/tags/${encodeURIComponent(tagId)}/visibility/users/${encodeURIComponent(handle)}`, {
+          method: 'DELETE',
+          headers: { ...authHeaders() },
+        });
+        if (res.status === 404) {
+          const text = await res.text();
+          if (text.includes('Tag not found')) {
+            setTagStatusMessage(tagId, 'Tag no longer exists', 'err');
+          } else {
+            setTagStatusMessage(tagId, 'User not found', 'warn');
+          }
+          return;
+        }
+        if (!res.ok) {
+          throw new Error(await res.text());
+        }
+        showToast(`Removed #${slug} for @${handle}`, 'ok');
+        await loadTagVisibility(lastVisibilityQuery);
+      } catch (err) {
+        console.error('remove tag visibility failed', err);
+        setTagStatusMessage(tagId, 'Failed to remove access', 'err');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function loadTagVisibility(query=''){
+      lastVisibilityQuery = query || '';
+      elTagVisibility.innerHTML = '<div class="badge">Loading…</div>';
+      try{
+        const url = query ? `/tags/visibility?query=${encodeURIComponent(query)}` : '/tags/visibility';
+        const res = await fetch(url, { headers:{ ...authHeaders() } });
+        if(!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        renderTagVisibility(Array.isArray(data) ? data : []);
+      }catch(err){
+        console.error('loadTagVisibility failed', err);
+        elTagVisibility.innerHTML = '<div class="badge badge--err">Failed to load tag visibility</div>';
+      }
+    }
+
+    elTabReports.addEventListener('click', () => switchTab('reports'));
+    elTabNewContent.addEventListener('click', () => switchTab('new-content'));
+
+    // Placeholder for load more actions
+    document.getElementById('load-more-reports').addEventListener('click', () => {
+      showToast('Load more reports - placeholder action', 'info');
+    });
+    document.getElementById('load-more-new-content').addEventListener('click', () => {
+      showToast('Load more new content - placeholder action', 'info');
+    });
+
+    // Admin Tags: combined usage + management
+    const elTagsList = document.getElementById('tags-list');
+    const elTagVisibility = document.getElementById('tag-visibility');
+    const qTagVisibility = document.getElementById('q-tag-visibility');
+    const btnSearchVisibility = document.getElementById('btn-search-visibility');
+    let isAdmin = false;
+    let lastQuery = '';
+    let lastVisibilityQuery = '';
+
+    async function renderTags(rows){
+      const html = rows.map(t => {
+        const right = isAdmin
+          ? `<div class="flex ai-c" style="gap:8px">
+              <button class="btn btn--subtle toggle-ban" data-id="${t.id}" data-banned="${t.is_banned}">${t.is_banned ? 'Unban' : 'Ban'}</button>
+            </div>`
+          : '';
+        return `
+          <div class="flex ai-c jc-b" style="padding:6px 0; border-bottom:1px solid rgba(185,236,255,.12)">
+            <div class="flex ai-c" style="gap:8px">
+              <span class="badge">#${t.slug}</span>
+              <span>${t.label || ''}</span>
+              ${t.is_banned ? '<span class="badge badge--err">banned</span>' : ''}
+            </div>
+            ${right}
+          </div>
+        `;
+      }).join('');
+      elTagsList.innerHTML = html || '<div class="badge">No tags</div>';
+      // Wire up toggles
+      if(isAdmin){
+        elTagsList.querySelectorAll('button.toggle-ban').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const id = btn.getAttribute('data-id');
+            const banned = btn.getAttribute('data-banned') === 'true';
+            const endpoint = banned ? `/tags/${id}/unban` : `/tags/${id}/ban`;
+            try{
+              const res = await fetch(endpoint, { method: 'POST', headers: { ...authHeaders() } });
+              if(!res.ok) throw new Error(await res.text());
+              showToast(banned ? 'Tag unbanned' : 'Tag banned', 'ok');
+              await loadTagsCombined(lastQuery);
+            }catch(err){ showToast('Failed to toggle', 'err'); }
+          });
+        });
+      }
+    }
+
+    async function loadTagsCombined(query=''){
+      lastQuery = query || '';
+      elTagsList.innerHTML = '<div class="badge">Loading…</div>';
+      try{
+        const url = query ? `/tags/usage?query=${encodeURIComponent(query)}&limit=500` : '/tags/usage?limit=500';
+        const res = await fetch(url, { headers:{ ...authHeaders() }, credentials: 'same-origin' });
+        if(!res.ok){ throw new Error(await res.text()); }
+        const rows = await res.json();
+        await renderTags(rows || []);
+      }catch(err){
+        elTagsList.innerHTML = '<div class="badge badge--err">Failed to load tags</div>';
+      }
+    }
+
+    // Create a new tag via API
+    const tagCreateRow = document.getElementById('tag-create-row');
+    const btnCreateTag = document.getElementById('btn-create-tag');
+    let creatingTag = false;
+    if(btnCreateTag){
+      btnCreateTag.addEventListener('click', async () => {
+        if(creatingTag) return;
+        if(!isAdmin){ showToast('Admins only', 'warn'); return; }
+        const inp = document.getElementById('new-tag');
+        const newTag = inp.value.trim();
+        if (!newTag) { showToast('Please enter a tag label', 'warn'); return; }
+        creatingTag = true;
+        try{
+          const res = await fetch('/tags', { method:'POST', headers:{ 'Content-Type':'application/json', ...authHeaders() }, body: JSON.stringify({ label: newTag }) });
+          if(!res.ok) throw new Error(await res.text());
+          inp.value = '';
+          showToast('Tag created', 'ok');
+          await loadTagsCombined();
+        }catch(err){
+          showToast('Create failed', 'err');
+        }finally{
+          creatingTag = false;
+        }
+      });
+    }
+
+    // Search handler for combined list
+    const btnSearchTags = document.getElementById('btn-search-tags');
+    const qTagAdmin = document.getElementById('q-tag-admin');
+    btnSearchTags?.addEventListener('click', () => loadTagsCombined(qTagAdmin.value));
+    qTagAdmin?.addEventListener('keydown', (e) => { if(e.key==='Enter'){ loadTagsCombined(qTagAdmin.value); }});
+    btnSearchVisibility?.addEventListener('click', () => loadTagVisibility(qTagVisibility.value));
+    qTagVisibility?.addEventListener('keydown', (e) => { if(e.key==='Enter'){ loadTagVisibility(qTagVisibility.value); }});
+
+    // Check if user has admin or moderator role
+    async function checkAdminAccess() {
+      try {
+        const res = await fetch('/auth/me', { headers: { ...authHeaders() } });
+        if (!res.ok) {
+          // Not authenticated – redirect to login
+          window.location.href = '/login';
+          return false;
+        }
+        const user = await res.json();
+        // Allow access for admin or moderator
+        if (!user.is_admin && !(Array.isArray(user.roles) && user.roles.includes('moderator'))) {
+          showToast(t('toast.access_denied'), 'err');
+          return false;
+        }
+        isAdmin = !!user.is_admin;
+        // Hide create controls for non-admins
+        if (!isAdmin && tagCreateRow) tagCreateRow.style.display = 'none';
+        // show Translations link for admins/moderators
+        const i18nLink = document.getElementById('i18n-link');
+        if (i18nLink) i18nLink.style.display = 'inline-flex';
+        return true;
+      } catch (err) {
+        showToast(t('toast.verify_failed'), 'err');
+        return false;
+      }
+    }
+
+    // SSE: Real-time notifications
+    function setupSSE(){
+      try{
+        const es = new EventSource('/notify/events');
+        es.onmessage = (evt) => {
+          try{
+            const data = JSON.parse(evt.data || '{}');
+            if(data && data.type){
+              if(data.type === 'post_created'){
+                const wrap = document.getElementById('new-content-list');
+                const el = document.createElement('div');
+                el.className = 'badge';
+                el.textContent = `New post: ${data.title || data.id}`;
+                wrap.prepend(el);
+                showToast('New post created', 'info');
+              }else if(data.type === 'reply_created'){
+                const wrap = document.getElementById('new-content-list');
+                const el = document.createElement('div');
+                el.className = 'badge';
+                el.textContent = `New reply: ${data.id}`;
+                wrap.prepend(el);
+                showToast('New reply added', 'info');
+              }else if(data.type === 'report_queued'){
+                const wrap = document.getElementById('reports-list');
+                const el = document.createElement('div');
+                el.className = 'report-item flex ai-c jc-b';
+                el.innerHTML = `
+                  <span class="badge">Report queued: ${data.target_type} ${data.target_id}${data.reason ? ' • ' + data.reason : ''}</span>
+                  <button class="btn btn--subtle resolve-btn" data-report-id="${data.id}">Resolve</button>
+                `;
+                wrap.prepend(el);
+                showToast('New report queued', 'warn');
+                // Bind resolve button
+                el.querySelector('.resolve-btn').addEventListener('click', async () => {
+                  try {
+                    const res = await fetch(`/moderation/reports/${data.id}/resolve`, {
+                      method: 'POST',
+                      headers: { ...authHeaders() },
+                    });
+                    if (!res.ok) throw new Error(await res.text());
+                    showToast('Report resolved', 'ok');
+                    // Remove the element or mark as resolved
+                    el.remove();
+                  } catch (err) {
+                    showToast('Failed to resolve report', 'err');
+                  }
+                });
+              }else if(data.type === 'report_processed'){
+                // Optionally handle, e.g., remove from list if still present
+                document.querySelectorAll('.report-item').forEach(item => {
+                  if (item.querySelector(`[data-report-id="${data.id}"]`)) {
+                    item.remove();
+                  }
+                });
+                showToast('Report processed', 'ok');
+              }
+            }
+          }catch(e){ /* ignore parse errors */ }
+        };
+        es.onerror = () => {
+          // Attempt a simple backoff reconnect
+          try{ es.close(); }catch{}
+          setTimeout(setupSSE, 2500);
+        };
+      }catch(e){ /* ignore */ }
+    }
+
+    (async () => {
+      const ok = await checkAdminAccess();
+      if (ok) {
+        await Promise.all([
+          loadTagsCombined(''),
+          loadTagVisibility(''),
+        ]);
+        setupSSE();
+      }
+    })();
+  </script>
+</body>
+</html>

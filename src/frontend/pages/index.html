@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LangSum • Home</title>
+  <link rel="stylesheet" href="/src/frontend/css/base.css">
+  <link rel="stylesheet" href="/src/frontend/css/components.css">
+  <link rel="stylesheet" href="/src/frontend/css/layout.css">
+  <link rel="stylesheet" href="/src/frontend/css/pages/home.css">
+  <script type="module" src="/src/frontend/js/i18n-runtime.js" data-i18n-init></script>
+</head>
+<body>
+  <header class="site">
+    <div class="inner container nav-3">
+      <div class="left"></div>
+      <nav class="flex ai-c" style="gap:8px">
+        <a class="btn btn--subtle" href="/login/" data-i18n="nav.login">Login</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <section id="hero" class="hero card">
+      <h1 data-i18n="home.welcome_title">Welcome to LangSum</h1>
+      <p class="mb-6" data-i18n="home.welcome_tagline">
+        <strong>Break language barriers in blogging.</strong> LangSum is an intelligent, multilingual platform that uses AI to translate and summarize content, making global knowledge accessible to everyone.
+      </p>
+      <div class="hero-features">
+        <div class="feature-item">
+          <strong>🌐 Multilingual</strong> - Read and understand posts in any language
+        </div>
+        <div class="feature-item">
+          <strong>🤖 AI-Powered</strong> - Instant translation and summarization
+        </div>
+        <div class="feature-item">
+          <strong>🏷️ Tag-Centric</strong> - Discover content through smart categorization
+        </div>
+        <div class="feature-item">
+          <strong>📱 Mobile-First</strong> - Optimized for all devices
+        </div>
+      </div>
+      <div class="hero-cta">
+        <p><em>Ready to explore? <a href="/login/" class="link">Sign in</a> to start discovering content or continue browsing as a guest.</em></p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site">
+    <div class="inner container flex ai-c jc-b">
+      <div> <span id="year"></span> LangSum</div>
+      <div class="hide-sm">Built with Windsurf guidelines</div>
+    </div>
+  </footer>
+
+  <script type="module">
+    import { getToken, clearToken, authHeaders } from '/src/frontend/js/auth.js';
+
+    document.getElementById('year').textContent = new Date().getFullYear().toString();
+
+    async function redirectIfAuthenticated(){
+      const token = getToken();
+      if (!token) return;
+      try {
+        const res = await fetch('/auth/me', { headers: { ...authHeaders() } });
+        if (res.ok) {
+          window.location.href = '/home';
+        } else if (res.status === 401) {
+          clearToken();
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    await redirectIfAuthenticated();
+  </script>
+</body>
+</html>

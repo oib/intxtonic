@@ -1,0 +1,31 @@
+# ~/.config/systemd/user/langsum-gunicorn.service
+# User-level systemd unit (no sudo). Uses %h for your home directory.
+[Unit]
+Description=LangSum FastAPI (gunicorn + uvicorn workers, user service)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Project root
+WorkingDirectory=%h/windsurf/LangSum
+# Load env vars (create %h/windsurf/LangSum/.env from config/env/.env.example)
+EnvironmentFile=%h/windsurf/LangSum/.env
+# Ensure Python can import from project root (so "src.backend..." works)
+Environment=PYTHONPATH=%h/windsurf/LangSum
+ExecStart=%h/windsurf/LangSum/.venv/bin/gunicorn \
+  -k uvicorn.workers.UvicornWorker \
+  --workers 2 \
+  --threads 2 \
+  --bind 0.0.0.0:8002 \
+  --timeout 60 \
+  --access-logfile - \
+  --error-logfile - \
+  src.backend.app.main:app
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

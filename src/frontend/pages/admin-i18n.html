@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LangSum • Admin • i18n</title>
+  <link rel="preload" href="/src/frontend/css/base.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="/src/frontend/css/base.css"></noscript>
+  <link rel="preload" href="/src/frontend/css/components.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="/src/frontend/css/components.css"></noscript>
+  <link rel="preload" href="/src/frontend/css/layout.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="/src/frontend/css/layout.css"></noscript>
+  <script type="module" src="/src/frontend/js/i18n-runtime.js" data-i18n-init></script>
+  <script type="module" src="/src/frontend/js/i18n-ui.js"></script>
+</head>
+<body>
+  <header class="site">
+    <div class="inner container nav-3">
+      <div class="left flex ai-c" style="gap:8px">
+        <a class="btn btn--subtle" href="/admin" data-i18n="nav.admin">Admin</a>
+      </div>
+      <nav class="flex ai-c" style="gap:8px">
+        <a id="login-link" class="btn btn--subtle" href="/login" data-i18n="nav.login">Login</a>
+        <button id="logout-btn" class="btn btn--ghost" style="display:none" data-i18n="nav.logout">Logout</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="row">
+      <div class="col-12">
+        <div class="card">
+          <h1 data-i18n="admin.i18n">Translations</h1>
+          <div class="flex ai-c" style="gap:8px; flex-wrap:wrap">
+            <label class="flex ai-c" style="gap:6px">
+              <span>Locale</span>
+              <select id="locale" class="input" style="max-width:160px"></select>
+            </label>
+            <button id="btn-import" class="btn btn--subtle">Import Missing</button>
+            <button id="btn-translate" class="btn btn--subtle">Batch Translate</button>
+            <button id="btn-cancel-translate" class="btn btn--ghost" style="display:none">Cancel</button>
+            <progress id="translate-progress" value="0" max="100" style="width:220px; display:none"></progress>
+            <span id="translate-status" style="color:var(--tx-1);"></span>
+            <label class="flex ai-c" style="gap:6px; margin-left:8px">
+              <input type="checkbox" id="debug-toggle">
+              <span>Debug</span>
+            </label>
+            <button id="btn-clear-debug" class="btn btn--ghost" type="button" style="display:none">Clear Logs</button>
+          </div>
+          <div id="debug-panel" class="card" style="display:none; margin-top:10px; background:var(--bg-2);">
+            <div class="flex ai-c jc-b" style="gap:8px; margin-bottom:6px">
+              <strong>AI Translation Debug</strong>
+              <span id="debug-meta" style="color:var(--tx-1); font-size:12px"></span>
+            </div>
+            <div id="debug-log" style="max-height:240px; overflow:auto; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; line-height:1.4; white-space:pre-wrap; background:var(--bg-1); padding:8px; border:1px solid var(--bd);"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="row">
+      <div class="col-12">
+        <div class="card">
+          <div class="flex ai-c jc-b">
+            <h2>Keys</h2>
+            <div><input id="q" class="input" placeholder="Filter keys..." style="max-width:240px"></div>
+          </div>
+          <div id="table" class="grid" style="gap:6px; margin-top:8px"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site">
+    <div class="inner container flex ai-c jc-b">
+      <div> <span id="year"></span> LangSum</div>
+      <div class="hide-sm">Built with Windsurf guidelines</div>
+    </div>
+  </footer>
+
+  <script type="module">
+    import { authHeaders, getToken, clearToken } from '/src/frontend/js/auth.js';
+    import { showToast } from '/src/frontend/js/toast.js';
+    import { initLanguageSwitcher } from '/src/frontend/js/i18n-ui.js';
+    import { t } from '/src/frontend/js/i18n-runtime.js';
+
+    document.getElementById('year').textContent = new Date().getFullYear().toString();
+    // No navbar language selector on this page
+
+    // Auth guard
+    if (!getToken()) { window.location.href = '/login'; }
+
+    const loginLink = document.getElementById('login-link');
+    const logoutBtn = document.getElementById('logout-btn');
+    function refreshAuthUI(){ const has = !!getToken(); loginLink.style.display = has?'none':'inline-flex'; logoutBtn.style.display = has?'inline-flex':'none'; }
+    logoutBtn.addEventListener('click', async () => {
+      try { await fetch('/auth/logout', { method: 'POST', headers: { ...authHeaders() } }); } catch {}
+      clearToken(); showToast(t('toast.signed_out'),'ok'); window.location.href = '/home';
+    });
+    refreshAuthUI();
+
+    const elLocale = document.getElementById('locale');
+    const elTable = document.getElementById('table');
+    const elQ = document.getElementById('q');
+    const elDebugToggle = document.getElementById('debug-toggle');
+    const elDebugPanel = document.getElementById('debug-panel');
+    const elDebugLog = document.getElementById('debug-log');
+    const elDebugMeta = document.getElementById('debug-meta');
+    const elClearDebug = document.getElementById('btn-clear-debug');
+
+    let debugEnabled = false;
+    const debugEntries = [];
+    function renderDebug(){
+      elDebugPanel.style.display = debugEnabled ? 'block' : 'none';
+      elClearDebug.style.display = debugEnabled ? 'inline-flex' : 'none';
+      if(!debugEnabled) return;
+      elDebugMeta.textContent = `${debugEntries.length} event(s)`;
+      elDebugLog.innerHTML = debugEntries.map(e => {
+        const { ts, key, src, dst, prompt, error } = e;
+        if(error){
+          return `[${ts}] KEY: ${key}\nERROR: ${error}\n`;
+        }
+        return `[${ts}] KEY: ${key}\nPROMPT:\n${prompt || '(not available)'}\nSRC: ${src}\nDST: ${dst}\n`;
+      }).join('\n');
+      elDebugLog.scrollTop = elDebugLog.scrollHeight;
+    }
+    function addDebug(entry){
+      const ts = new Date().toLocaleTimeString();
+      debugEntries.push({ ts, ...entry });
+      renderDebug();
+    }
+    elDebugToggle.addEventListener('change', () => { debugEnabled = !!elDebugToggle.checked; renderDebug(); });
+    elClearDebug.addEventListener('click', () => { debugEntries.splice(0, debugEntries.length); renderDebug(); });
+
+    const EU_LOCALES = [
+      { code: 'bg', label: 'Bulgarian (bg)' },
+      { code: 'hr', label: 'Croatian (hr)' },
+      { code: 'cs', label: 'Czech (cs)' },
+      { code: 'da', label: 'Danish (da)' },
+      { code: 'nl', label: 'Dutch (nl)' },
+      { code: 'en', label: 'English (en)' },
+      { code: 'et', label: 'Estonian (et)' },
+      { code: 'fi', label: 'Finnish (fi)' },
+      { code: 'fr', label: 'French (fr)' },
+      { code: 'de', label: 'German (de)' },
+      { code: 'el', label: 'Greek (el)' },
+      { code: 'hu', label: 'Hungarian (hu)' },
+      { code: 'ga', label: 'Irish (ga)' },
+      { code: 'it', label: 'Italian (it)' },
+      { code: 'lv', label: 'Latvian (lv)' },
+      { code: 'lt', label: 'Lithuanian (lt)' },
+      { code: 'mt', label: 'Maltese (mt)' },
+      { code: 'pl', label: 'Polish (pl)' },
+      { code: 'pt', label: 'Portuguese (pt)' },
+      { code: 'ro', label: 'Romanian (ro)' },
+      { code: 'sk', label: 'Slovak (sk)' },
+      { code: 'sl', label: 'Slovenian (sl)' },
+      { code: 'es', label: 'Spanish (es)' },
+      { code: 'sv', label: 'Swedish (sv)' },
+    ];
+
+    async function loadLocales(){
+      try{
+        const res = await fetch('/i18n-admin/locales', { headers:{ ...authHeaders() } });
+        if(!res.ok) throw new Error(await res.text());
+        const rows = await res.json();
+        const existing = Array.isArray(rows) ? rows.map(r => String(r.code)) : [];
+        const euMap = new Map(EU_LOCALES.map(l => [l.code, l.label]));
+        const mergedCodes = Array.from(new Set([...EU_LOCALES.map(l => l.code), ...existing]));
+        elLocale.innerHTML = mergedCodes.map(code => {
+          const label = euMap.get(code) || `${code}`;
+          return `<option value="${code}">${label}</option>`;
+        }).join('');
+      }catch(e){ showToast(t('toast.load_failed'),'err'); }
+    }
+
+    let currentKeys = {};
+
+    function renderKeys(){
+      const q = (elQ.value||'').toLowerCase();
+      const entries = Object.entries(currentKeys).filter(([k,_v]) => !q || k.toLowerCase().includes(q));
+      elTable.innerHTML = entries.length ? entries.map(([k,v]) => `
+        <div class="grid" style="grid-template-columns: 1fr 1fr auto auto; gap:8px; align-items:center">
+          <code style="font-size:12px">${k}</code>
+          <input class="input kv" data-key="${k}" value="${(v??'').toString().replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
+          <button class="btn btn--subtle save" data-key="${k}">Save</button>
+          <button class="btn btn--ghost translate" data-key="${k}" data-i18n="post.translate">Translate</button>
+        </div>
+      `).join('') : '<div class="badge">No keys</div>';
+      elTable.querySelectorAll('button.save').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const key = btn.getAttribute('data-key');
+          const val = elTable.querySelector(`input.kv[data-key="${key}"]`)?.value || '';
+          try{
+            const url = `/i18n-admin/keys?lang=${encodeURIComponent(elLocale.value)}&key=${encodeURIComponent(key)}&value=${encodeURIComponent(val)}`;
+            const res = await fetch(url, { method:'PATCH', headers:{ ...authHeaders() } });
+            if(!res.ok) throw new Error(await res.text());
+            currentKeys[key] = val;
+            showToast(t('toast.saved'),'ok');
+          }catch(e){ showToast(t('toast.error'),'err'); }
+        });
+      });
+
+      // Per-key translate
+      elTable.querySelectorAll('button.translate').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const key = btn.getAttribute('data-key');
+          if(!key) return;
+          btn.setAttribute('disabled','true');
+          try{
+            const r = await fetch('/i18n-admin/translate-key', {
+              method:'POST', headers:{ 'Content-Type':'application/json', ...authHeaders() },
+              body: JSON.stringify({ lang: elLocale.value, key })
+            });
+            if(!r.ok) throw new Error(await r.text());
+            const j = await r.json();
+            currentKeys[key] = j.dst;
+            const input = elTable.querySelector(`input.kv[data-key="${key}"]`);
+            if(input){
+              input.value = j.dst ?? '';
+              input.style.transition = 'background-color 0.3s';
+              const oldBg = input.style.backgroundColor;
+              input.style.backgroundColor = 'rgba(0,255,0,0.12)';
+              setTimeout(() => { input.style.backgroundColor = oldBg || ''; }, 350);
+            }
+            if(typeof debugEnabled !== 'undefined' && debugEnabled){ addDebug({ key, src: j.src, dst: j.dst, prompt: j.prompt }); }
+            showToast(t('toast.saved'),'ok');
+          }catch(e){ showToast(t('toast.translate_failed'),'err'); }
+          finally { btn.removeAttribute('disabled'); }
+        });
+      });
+    }
+
+    async function loadKeys(){
+      elTable.innerHTML = '<div class="badge">Loading…</div>';
+      try{
+        const res = await fetch(`/i18n-admin/keys?lang=${encodeURIComponent(elLocale.value)}`, { headers:{ ...authHeaders() } });
+        if(!res.ok) throw new Error(await res.text());
+        currentKeys = await res.json();
+        renderKeys();
+      }catch(e){ elTable.innerHTML = '<div class="badge badge--err">Failed to load keys</div>'; }
+    }
+
+    document.getElementById('btn-import').addEventListener('click', async () => {
+      try{
+        const res = await fetch(`/i18n-admin/import-missing?lang=${encodeURIComponent(elLocale.value)}`, { method:'POST', headers:{ ...authHeaders() } });
+        if(!res.ok) throw new Error(await res.text());
+        const j = await res.json();
+        showToast(t('toast.saved'),'ok');
+        await loadKeys();
+      }catch(e){ showToast(t('toast.import_failed'),'err'); }
+    });
+
+    let isTranslating = false;
+    let isCancelled = false;
+    document.getElementById('btn-translate').addEventListener('click', async () => {
+      if(isTranslating) return; // rate limit: ignore repeated clicks
+      isTranslating = true;
+      const btn = document.getElementById('btn-translate');
+      const btnCancel = document.getElementById('btn-cancel-translate');
+      btn.setAttribute('disabled','true');
+      btnCancel.style.display = 'inline-flex';
+      isCancelled = false;
+      const bar = document.getElementById('translate-progress');
+      const stat = document.getElementById('translate-status');
+      bar.style.display = 'inline-block';
+      bar.value = 0; bar.max = 100; stat.textContent = '';
+      try{
+        // Load EN and current locale to compute missing keys
+        const [resEN, resDST] = await Promise.all([
+          fetch('/i18n-admin/keys?lang=en', { headers:{ ...authHeaders() } }),
+          fetch(`/i18n-admin/keys?lang=${encodeURIComponent(elLocale.value)}`, { headers:{ ...authHeaders() } })
+        ]);
+        if(!resEN.ok || !resDST.ok) throw new Error('Failed to load locales');
+        const enKeys = await resEN.json();
+        const dstKeys = await resDST.json();
+        // Translate keys that are missing OR whose value equals the English source
+        const candidates = Object.keys(enKeys).filter(k => {
+          const enVal = String(enKeys[k] ?? '');
+          const dstVal = String(dstKeys[k] ?? '');
+          return !(k in dstKeys) || dstVal === '' || dstVal === enVal;
+        });
+        if(!candidates.length){ showToast(t('toast.nothing_to_translate'),'info'); bar.style.display='none'; stat.textContent=''; return; }
+        let done = 0;
+        const total = candidates.length;
+        for(const k of candidates){
+          if(isCancelled) break;
+          const r = await fetch('/i18n-admin/translate-key', {
+            method:'POST', headers:{ 'Content-Type':'application/json', ...authHeaders() },
+            body: JSON.stringify({ lang: elLocale.value, key: k })
+          });
+          if(!r.ok) throw new Error(await r.text());
+          const j = await r.json();
+          if(debugEnabled){ addDebug({ key: k, src: j.src, dst: j.dst, prompt: j.prompt }); }
+          // Update in-memory model and the visible input value immediately
+          currentKeys[k] = j.dst;
+          const input = elTable.querySelector(`input.kv[data-key="${k}"]`);
+          if(input){
+            input.value = j.dst ?? '';
+            // flash effect to indicate update
+            input.style.transition = 'background-color 0.3s';
+            const oldBg = input.style.backgroundColor;
+            input.style.backgroundColor = 'rgba(0,255,0,0.12)';
+            setTimeout(() => { input.style.backgroundColor = oldBg || ''; }, 350);
+          }
+          done += 1;
+          const pct = Math.round((done/total)*100);
+          bar.value = pct; stat.textContent = `${done}/${total} — ${k}`;
+          // small delay to avoid overloading backend/UI
+          await new Promise(res => setTimeout(res, 120));
+        }
+        if(!isCancelled){
+          showToast(t('toast.saved'),'ok');
+        } else {
+          showToast('Cancelled','info');
+        }
+        // Table has been updated row-by-row; no need to reload keys here
+      }catch(e){ if(debugEnabled){ addDebug({ key: 'N/A', error: String(e) }); } showToast(t('toast.translate_failed'),'err'); }
+      finally {
+        setTimeout(() => { bar.style.display='none'; stat.textContent=''; }, 800);
+        btn.removeAttribute('disabled');
+        isTranslating = false;
+        isCancelled = false;
+        btnCancel.style.display = 'none';
+      }
+    });
+
+    document.getElementById('btn-cancel-translate').addEventListener('click', () => {
+      if(!isTranslating) return;
+      isCancelled = true;
+    });
+
+    elLocale.addEventListener('change', loadKeys);
+    // debounce filter input
+    let tmrFilter;
+    elQ.addEventListener('input', () => { clearTimeout(tmrFilter); tmrFilter = setTimeout(renderKeys, 180); });
+
+    await loadLocales();
+    await loadKeys();
+  </script>
+</body>
+</html>

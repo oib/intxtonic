@@ -1,0 +1,75 @@
+/* Base: variables, reset, typography, utilities */
+:root{
+  --bg-0:#0b0f14; --bg-1:#11161c;
+  --tx-0:#e6edf3; --tx-1:#a7b3be; --tx-2:#e6edf3;
+  --pri:#ff7a1a; --ice:#b9ecff;
+  --ok:#3ddc97; --warn:#ffcc00; --err:#ff4d4d;
+
+  --s-1:4px; --s-2:8px; --s-3:12px; --s-4:16px;
+  --s-5:24px; --s-6:32px; --s-7:48px; --s-8:64px;
+  --r-1:8px; --r-2:16px;
+  --gutter:16px;
+}
+
+@media (min-width:960px){ :root{ --gutter:24px; } }
+
+/* Reset */
+*{ box-sizing:border-box; }
+html,body{ height:100%; }
+html{ color-scheme:dark; }
+body{
+  margin:0; background:var(--bg-0); color:var(--tx-0);
+  font:16px/1.5 -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif;
+  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+}
+img,svg,video{ max-width:100%; height:auto; display:block; }
+button,input,select,textarea{ font:inherit; color:inherit; }
+:focus-visible{ outline:2px solid var(--ice); outline-offset:2px; }
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+  margin: 0 0 0.5rem 0; /* Consistent margin */
+  font-weight: 600; /* Or bold, depending on design */
+  color: var(--tx-2); /* Use theme color for readability */
+  font-size: 1.2rem; /* Base font size */
+  line-height: 1.3; /* Consistent line height */
+}
+h1 {
+  font-size: 1.8rem; /* Larger for h1 */
+  line-height: 1.2;
+}
+h2 {
+  font-size: 1.6rem;
+  line-height: 1.25;
+}
+h3 {
+  font-size: 1.4rem;
+  line-height: 1.3;
+}
+h4 {
+  font-size: 1.2rem;
+  line-height: 1.3;
+}
+h5, h6 {
+  font-size: 1.0rem;
+  line-height: 1.3;
+}
+h1{ font-size:clamp(24px, 3.5vw, 36px); }
+h2{ font-size:clamp(20px, 3vw, 28px); }
+h3{ font-size:clamp(18px, 2.5vw, 22px); }
+p{ margin:0 0 var(--s-4); color:var(--tx-1); }
+
+/* Links */
+a{ color:var(--ice); text-decoration:none; }
+a:hover{ text-decoration:underline; }
+
+/* Utilities */
+.container{ width:100%; max-width:960px; margin:0 auto; padding:0 var(--gutter); }
+.flex{ display:flex; } .grid{ display:grid; }
+.ai-c{ align-items:center; } .jc-b{ justify-content:space-between; }
+.mt-4{ margin-top:var(--s-4);} .mb-6{ margin-bottom:var(--s-6);} .px-4{ padding-left:var(--s-4); padding-right:var(--s-4);} .py-6{ padding-top:var(--s-6); padding-bottom:var(--s-6);} 
+.hide-sm{ display:none; }
+@media (min-width:960px){ .hide-lg{ display:none; } .hide-sm{ display:initial; } }
+
+/* Safe area helpers */
+.safe-b{ padding-bottom:max(var(--s-4), env(safe-area-inset-bottom)); }

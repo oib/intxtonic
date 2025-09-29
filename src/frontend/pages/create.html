@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LangSum • New Post</title>
+  <link rel="stylesheet" href="/src/frontend/css/base.css">
+  <link rel="stylesheet" href="/src/frontend/css/components.css">
+  <link rel="stylesheet" href="/src/frontend/css/layout.css">
+</head>
+<body>
+  <header class="site">
+    <div class="inner container flex ai-c jc-b">
+      <div class="flex ai-c" style="gap:8px">
+        <a id="admin-link" class="btn btn--subtle" href="/admin" style="display:none">Admin</a>
+      </div>
+      <nav class="flex ai-c" style="gap:8px">
+        <a id="dashboard-link" class="btn btn--subtle" href="/dashboard/">Dashboard</a>
+        <a id="profile-link" class="btn btn--subtle" href="#" style="display:none">Profile</a>
+        <a id="login-link" class="btn btn--subtle" href="/login/">Login</a>
+        <button id="logout-btn" class="btn btn--ghost" style="display:none">Logout</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="row">
+      <div class="col-12">
+        <div class="card">
+          <h1>Create a New Post</h1>
+          <p class="mb-6" style="color:var(--tx-1)">Write your post below. Posts are visible to logged-in users.</p>
+          <div class="grid" style="gap:12px">
+            <label>
+              <div class="mb-6">Title</div>
+              <input id="title" class="input" placeholder="Post title" required>
+            </label>
+            <label>
+              <div class="mb-6">Content (Markdown)</div>
+              <textarea id="body" class="input" rows="12" placeholder="Write your post in Markdown..." required></textarea>
+            </label>
+            <div class="flex ai-c" style="gap:8px; flex-wrap:wrap">
+              <input id="image-file" type="file" accept="image/png,image/jpeg,image/jpg,image/gif,image/webp" style="max-width:280px">
+              <input id="image-alt" class="input" placeholder="Alt text (optional)" style="max-width:220px">
+              <button id="btn-upload-image" class="btn btn--subtle" type="button">Upload image</button>
+              <span class="badge" style="color:var(--tx-1)">Up to 5MB; PNG/JPG/GIF/WebP</span>
+            </div>
+            <div class="divider"></div>
+            <div>
+              <h2 class="mb-6" style="margin:0">Tags</h2>
+              <div style="position:relative;">
+                <div class="flex ai-c" style="gap:8px; flex-wrap:wrap">
+                  <input id="q-tags-create" class="input" placeholder="Search tags..." style="max-width:260px">
+                  <button id="btn-search-tags-create" class="btn btn--subtle" type="button">Search</button>
+                </div>
+                <div id="tag-suggestions-create" class="card" style="position:absolute; display:none; width:100%; max-width:420px; z-index:20; margin-top:6px;"></div>
+              </div>
+              <div id="admin-create-tag" style="display:none; margin-top:10px" class="flex ai-c" >
+                <input id="new-tag-label" class="input" placeholder="New tag label" style="max-width:260px; margin-right:8px">
+                <button id="btn-create-tag" class="btn btn--subtle" type="button">Create Tag</button>
+              </div>
+              <div style="margin-top:10px" class="flex ai-c" >
+                <div id="selected-tags-create" class="flex" style="gap:6px; flex-wrap:wrap"></div>
+                <button id="btn-clear-tags-create" class="btn btn--subtle" type="button" style="display:none; margin-left:8px">Clear</button>
+              </div>
+            </div>
+            <div class="flex" style="gap:8px">
+              <button id="btn-publish" class="btn">Publish</button>
+              <a href="/home" class="btn btn--subtle">Cancel</a>
+            </div>
+            <div id="msg" class="badge" style="display:none"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site">
+    <div class="inner container flex ai-c jc-b">
+      <div> <span id="year"></span> LangSum</div>
+      <div class="hide-sm">Built with Windsurf guidelines</div>
+    </div>
+  </footer>
+
+  <script type="module">
+    import { authHeaders, getToken, clearToken } from '/src/frontend/js/auth.js';
+    import { showToast } from '/src/frontend/js/toast.js';
+
+    document.getElementById('year').textContent = new Date().getFullYear().toString();
+
+    // Strong auth check: prefer /auth/me (cookie or token). Redirect to /login on 401.
+    let currentUser = null;
+    try {
+      const r = await fetch('/auth/me', { headers: { ...authHeaders() } });
+      if (!r.ok) { window.location.href = '/login'; }
+      else { currentUser = await r.json(); }
+    } catch { window.location.href = '/login'; }
+
+    // Header auth UI
+    const loginLink = document.getElementById('login-link');
+    const logoutBtn = document.getElementById('logout-btn');
+    const profileLink = document.getElementById('profile-link');
+    const dashboardLink = document.getElementById('dashboard-link');
+    const adminLink = document.getElementById('admin-link');
+
+    function refreshAuthUI(){
+      const has = !!getToken();
+      loginLink.style.display = has ? 'none' : 'inline-flex';
+      logoutBtn.style.display = has ? 'inline-flex' : 'none';
+      if (dashboardLink) dashboardLink.style.display = has ? 'inline-flex' : 'none';
+      if (profileLink) {
+        const defaultLabel = profileLink.dataset.defaultLabel || profileLink.textContent || 'Profile';
+        profileLink.dataset.defaultLabel = defaultLabel;
+        profileLink.textContent = defaultLabel;
+        profileLink.style.display = 'none';
+      }
+      if (has) {
+        const u = currentUser;
+        if (u && u.handle && profileLink) {
+          profileLink.href = `/user/${encodeURIComponent(u.handle)}`;
+          const label = (u.display_name || u.handle || '').trim();
+          if (label) profileLink.textContent = label;
+          profileLink.style.display = 'inline-flex';
+        }
+        if (u && (u.is_admin || (Array.isArray(u.roles) && u.roles.includes('admin')))) {
+          if (adminLink) adminLink.style.display = 'inline-flex';
+          document.getElementById('admin-create-tag').style.display = 'flex';
+        } else {
+          if (adminLink) adminLink.style.display = 'none';
+          document.getElementById('admin-create-tag').style.display = 'none';
+        }
+      }
+    }
+    refreshAuthUI();
+    logoutBtn.addEventListener('click', async () => {
+      try { await fetch('/auth/logout', { method: 'POST', headers: { ...authHeaders() } }); } catch {}
+      clearToken();
+      showToast('Signed out','ok');
+      window.location.href = '/home';
+    });
+
+    // Tag selection state
+    const selectedTags = new Set();
+    function renderSelectedTags(){
+      const el = document.getElementById('selected-tags-create');
+      const btnClear = document.getElementById('btn-clear-tags-create');
+      const arr = Array.from(selectedTags);
+      if (btnClear) btnClear.style.display = arr.length ? 'inline-flex' : 'none';
+      el.innerHTML = arr.length ? arr.map(s => `<span class="badge">#${s} <button class="btn btn--ghost rm-tag" data-slug="${s}">×</button></span>`).join(' ') : '<span class="badge">No tags selected</span>';
+      el.querySelectorAll('button.rm-tag').forEach(b => b.addEventListener('click', () => { selectedTags.delete(b.getAttribute('data-slug')); renderSelectedTags(); }));
+    }
+    renderSelectedTags();
+
+    // Tag search/suggestions
+    const elQTags = document.getElementById('q-tags-create');
+    const elBtnSearchTags = document.getElementById('btn-search-tags-create');
+    const elSug = document.getElementById('tag-suggestions-create');
+    let sugItems = [];
+    let sugIndex = -1;
+    let tmrSug;
+    function renderTagSuggestions(items){
+      // De-duplicate by slug
+      const seen = new Set();
+      sugItems = (items||[]).filter(t => { if(seen.has(t.slug)) return false; seen.add(t.slug); return true; });
+      if(!sugItems.length){ elSug.style.display='none'; return; }
+      elSug.innerHTML = sugItems.map((t,i) => `
+        <div class="sug-row" data-idx="${i}" data-slug="${t.slug}" style="padding:8px; cursor:pointer;">
+          <span>#${t.slug}</span>
+          ${t.label && t.label !== t.slug ? ` <span style=\"color:var(--tx-1)\">— ${t.label}</span>` : ''}
+        </div>
+      `).join('');
+      elSug.style.display = 'block';
+      sugIndex = -1;
+      elSug.querySelectorAll('.sug-row').forEach(row => {
+        row.addEventListener('mouseenter', () => highlightSuggestion(parseInt(row.getAttribute('data-idx'))));
+        row.addEventListener('click', () => selectSuggestion(parseInt(row.getAttribute('data-idx'))));
+      });
+    }
+    function highlightSuggestion(idx){
+      const rows = elSug.querySelectorAll('.sug-row');
+      rows.forEach(r => r.style.background='transparent');
+      if(idx>=0 && idx<rows.length){ rows[idx].style.background = 'var(--bg-3)'; }
+      sugIndex = idx;
+    }
+    function selectSuggestion(idx){
+      if(idx<0 || idx>=sugItems.length) return;
+      const slug = sugItems[idx].slug;
+      if(slug){ selectedTags.add(slug); renderSelectedTags(); }
+      if(elQTags) elQTags.value = '';
+      elSug.style.display='none';
+    }
+    async function searchTags(q){
+      try {
+        const res = await fetch(`/tags?query=${encodeURIComponent(q)}&limit=10`, { headers:{ ...authHeaders() } });
+        if(!res.ok){ elSug.style.display='none'; return; }
+        const rows = await res.json();
+        renderTagSuggestions(rows);
+      } catch { elSug.style.display='none'; }
+    }
+    elBtnSearchTags?.addEventListener('click', () => { const q = (elQTags?.value||'').trim(); if(q) searchTags(q); });
+    elQTags?.addEventListener('input', () => {
+      const q = (elQTags?.value || '').trim();
+      clearTimeout(tmrSug);
+      if(!q){ elSug.style.display='none'; return; }
+      tmrSug = setTimeout(() => searchTags(q), 200);
+    });
+    elQTags?.addEventListener('keydown', (e) => {
+      if(e.key==='Enter'){
+        if (elSug.style.display==='block' && sugItems.length){
+          selectSuggestion(sugIndex>=0 ? sugIndex : 0);
+          e.preventDefault();
+        } else {
+          const q=(elQTags?.value||'').trim(); if(q) searchTags(q);
+        }
+      } else if (e.key==='ArrowDown'){
+        if (elSug.style.display==='block' && sugItems.length){ highlightSuggestion(Math.min((sugIndex<0?0:sugIndex+1), sugItems.length-1)); e.preventDefault(); }
+      } else if (e.key==='ArrowUp'){
+        if (elSug.style.display==='block' && sugItems.length){ highlightSuggestion(Math.max((sugIndex<=0?0:sugIndex-1), 0)); e.preventDefault(); }
+      }
+    });
+    elQTags?.addEventListener('blur', () => setTimeout(() => { elSug.style.display='none'; }, 150));
+    document.getElementById('btn-clear-tags-create')?.addEventListener('click', () => { selectedTags.clear(); renderSelectedTags(); });
+
+    // Admin: create tag
+    document.getElementById('btn-create-tag')?.addEventListener('click', async () => {
+      const label = (document.getElementById('new-tag-label')?.value || '').trim();
+      if(!label){ showToast('Enter a tag label','warn'); return; }
+      try{
+        const res = await fetch('/tags', { method:'POST', headers:{ 'Content-Type':'application/json', ...authHeaders() }, body: JSON.stringify({ label }) });
+        if(!res.ok){
+          const txt = await res.text();
+          showToast(txt.includes('409') || txt.includes('exists') ? 'Tag already exists' : 'Failed to create tag','err');
+          return;
+        }
+        const tag = await res.json();
+        selectedTags.add(tag.slug);
+        renderSelectedTags();
+        (document.getElementById('new-tag-label')||{}).value = '';
+        showToast('Tag created','ok');
+      }catch{ showToast('Failed to create tag','err'); }
+    });
+    // Create tag on Enter key in label input
+    (document.getElementById('new-tag-label'))?.addEventListener('keydown', (e) => {
+      if(e.key === 'Enter'){
+        e.preventDefault();
+        const btn = document.getElementById('btn-create-tag');
+        btn?.click();
+      }
+    });
+
+    // Publish handler
+    const elTitle = document.getElementById('title');
+    const elBody = document.getElementById('body');
+    const elBtnPublish = document.getElementById('btn-publish');
+    const elMsg = document.getElementById('msg');
+
+    // Image upload handler -> inserts markdown at cursor
+    function insertAtCursor(textarea, snippet){
+      const start = textarea.selectionStart || 0;
+      const end = textarea.selectionEnd || 0;
+      const before = textarea.value.slice(0, start);
+      const after = textarea.value.slice(end);
+      textarea.value = before + snippet + after;
+      const pos = start + snippet.length;
+      textarea.selectionStart = textarea.selectionEnd = pos;
+      textarea.focus();
+    }
+    document.getElementById('btn-upload-image')?.addEventListener('click', async () => {
+      const fileInput = document.getElementById('image-file');
+      const altInput = document.getElementById('image-alt');
+      const file = fileInput?.files?.[0];
+      if(!file){ showToast('Choose an image first','warn'); return; }
+      if(file.size > 5*1024*1024){ showToast('Image too large (max 5MB)','warn'); return; }
+      const fd = new FormData();
+      fd.append('file', file);
+      try{
+        const res = await fetch('/uploads', { method:'POST', headers: { ...authHeaders() }, body: fd });
+        if(!res.ok){
+          const txt = await res.text();
+          showToast(txt || 'Upload failed', 'err');
+          return;
+        }
+        const data = await res.json();
+        if(data?.url){
+          const alt = (altInput?.value || '').trim();
+          const md = `\n\n![${alt}](${data.url})\n\n`;
+          insertAtCursor(elBody, md);
+          showToast('Image uploaded','ok');
+          // Clear file input
+          if(fileInput) fileInput.value = '';
+          if(altInput) altInput.value = '';
+        } else {
+          showToast('Upload failed','err');
+        }
+      }catch(err){ showToast('Upload failed','err'); }
+    });
+
+    elBtnPublish.addEventListener('click', async () => {
+      const title = (elTitle.value || '').trim();
+      const body_md = (elBody.value || '').trim();
+      elMsg.style.display = 'none';
+      if (!title || !body_md) { showToast('Title and body required','warn'); return; }
+      try {
+        const res = await fetch('/posts', { method:'POST', headers:{ 'Content-Type':'application/json', ...authHeaders() }, body: JSON.stringify({ title, body_md }) });
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        showToast('Post published','ok');
+        if (data?.id) {
+          // Attach selected tags (if any)
+          const arr = Array.from(selectedTags || []);
+          for (const slug of arr) {
+            try {
+              await fetch(`/posts/${data.id}/tags`, { method:'POST', headers:{ 'Content-Type':'application/json', ...authHeaders() }, body: JSON.stringify({ slug }) });
+            } catch {}
+          }
+          window.location.href = `/post/${data.id}`; return;
+        }
+        elMsg.textContent = 'Published, but missing id in response';
+        elMsg.style.display = 'inline-block';
+      } catch (err) {
+        elMsg.textContent = 'Publish failed';
+        elMsg.style.display = 'inline-block';
+        showToast('Publish failed','err');
+      }
+    });
+  </script>
+</body>
+</html>

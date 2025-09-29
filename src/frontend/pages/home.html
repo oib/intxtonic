@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LangSum • Home</title>
+  <link rel="stylesheet" href="/src/frontend/css/base.css">
+  <link rel="stylesheet" href="/src/frontend/css/components.css">
+  <link rel="stylesheet" href="/src/frontend/css/layout.css">
+  <link rel="stylesheet" href="/src/frontend/css/pages/home.css">
+  <script type="module" src="/src/frontend/js/i18n-runtime.js" data-i18n-init></script>
+</head>
+<body>
+  <header class="site">
+    <div class="inner container nav-3">
+      <div class="left flex ai-c" style="gap:8px">
+        <a id="newpost-link" class="btn" href="/create" style="display:none" data-i18n="nav.new_post">New Post</a>
+        <a id="admin-link" class="btn btn--subtle" href="/admin" style="display:none" data-i18n="nav.admin">Admin</a>
+      </div>
+      <nav class="flex" style="gap:8px">
+        <a class="btn btn--subtle" href="/dashboard/" data-i18n="nav.dashboard">Dashboard</a>
+        <a class="btn btn--ghost" href="/notifications" aria-label="Notifications">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 7h18s-3 0-3-7" />
+            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+          </svg>
+        </a>
+        <a id="profile-link" class="btn btn--subtle" href="#" style="display:none" data-i18n="nav.profile">Profile</a>
+        <button id="logout-btn" class="btn btn--ghost" data-i18n="nav.logout">Logout</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="card welcome-card" id="welcome-card">
+      <h1 id="welcome-heading">Welcome back to LangSum</h1>
+      <p id="welcome-subheading">Dive into the latest translations, summaries, and conversations crafted by the community.</p>
+      <div class="welcome-actions">
+        <a href="/dashboard/" class="btn btn--primary" data-i18n="home.go_to_dashboard">Go to Dashboard</a>
+        <a href="/create" class="btn btn--subtle" data-i18n="home.create_post">Create New Post</a>
+        <a href="/user/settings" class="btn btn--subtle">Settings</a>
+      </div>
+    </section>
+
+    <section class="row" id="content-auth">
+      <div class="col-12">
+        <div class="card">
+          <h2 data-i18n="home.quick_links">Quick links</h2>
+          <ul class="home-links">
+            <li><a href="/dashboard/">Discover trending posts</a></li>
+            <li><a href="/tags/top">Browse top tags</a></li>
+            <li><a href="/notifications">Check your notifications</a></li>
+          </ul>
+          <p class="hint" data-i18n="home.try_ai">Tip: translate or summarise any post instantly using the AI tools in the post toolbar.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card home-section" aria-labelledby="home-latest-heading">
+      <div class="home-section-head">
+        <h2 id="home-latest-heading">Latest for you</h2>
+        <a href="/dashboard/" class="link link--subtle">View full feed</a>
+      </div>
+      <div id="auth-latest-posts" class="home-posts-grid" role="list"></div>
+    </section>
+  </main>
+
+  <footer class="site">
+    <div class="inner container flex ai-c jc-b">
+      <div> <span id="year"></span> LangSum</div>
+      <div class="hide-sm">Built with Windsurf guidelines</div>
+    </div>
+  </footer>
+
+  <script type="module">
+    import { authHeaders, getToken, clearToken } from '/src/frontend/js/auth.js';
+    import { showToast } from '/src/frontend/js/toast.js';
+    import { t } from '/src/frontend/js/i18n-runtime.js';
+
+    document.getElementById('year').textContent = new Date().getFullYear().toString();
+
+    const logoutBtn = document.getElementById('logout-btn');
+    const profileLink = document.getElementById('profile-link');
+    const adminLink = document.getElementById('admin-link');
+    const newPostLink = document.getElementById('newpost-link');
+    const welcomeHeading = document.getElementById('welcome-heading');
+    const welcomeSubheading = document.getElementById('welcome-subheading');
+    const latestPosts = document.getElementById('auth-latest-posts');
+
+    if (profileLink) {
+      const defaultLabel = profileLink.dataset.defaultLabel || profileLink.textContent || 'Profile';
+      profileLink.dataset.defaultLabel = defaultLabel;
+      profileLink.textContent = defaultLabel;
+      profileLink.style.display = 'none';
+    }
+
+    logoutBtn.addEventListener('click', async () => {
+      try {
+        await fetch('/auth/logout', { method: 'POST', headers: { ...authHeaders() } });
+      } catch {}
+      clearToken();
+      showToast(t('toast.signed_out'), 'ok');
+      window.location.href = '/';
+    });
+
+    function renderPostsSkeleton(){
+      latestPosts.innerHTML = '<div class="skeleton"></div>'.repeat(3);
+    }
+
+    async function loadLatestForUser(){
+      renderPostsSkeleton();
+      try {
+        const params = new URLSearchParams({ sort: 'newest', limit: '6' });
+        const res = await fetch(`/posts?${params.toString()}`, { headers: { ...authHeaders() } });
+        if (res.status === 401){
+          clearToken();
+          window.location.href = '/login/';
+          return;
+        }
+        if (!res.ok) throw new Error('Failed');
+        const data = await res.json();
+        const items = Array.isArray(data.items) ? data.items.slice(0,6) : [];
+        if (!items.length){
+          latestPosts.innerHTML = '<div class="badge">No posts yet. Start by creating your first one!</div>';
+          return;
+        }
+        latestPosts.innerHTML = items.map(item => `
+          <article class="home-post" role="listitem">
+            <a class="home-post__title" href="/post/${item.id}">${item.title}</a>
+            <div class="home-post__meta">${item.author ? `by ${item.author}` : 'by someone'}${item.created_at ? ` · ${new Date(item.created_at).toLocaleDateString()}` : ''}</div>
+            <p class="home-post__excerpt">${(item.body_md || '').slice(0, 200)}${(item.body_md || '').length > 200 ? '…' : ''}</p>
+            <div class="home-post__tags">
+              ${(Array.isArray(item.tags) ? item.tags : []).slice(0,3).map(tag => `<span class="badge">#${tag.slug}</span>`).join('')}
+            </div>
+          </article>
+        `).join('');
+      } catch (err){
+        latestPosts.innerHTML = '<div class="badge badge--err">Unable to load personalised posts right now.</div>';
+      }
+    }
+
+    async function init(){
+      const token = getToken();
+      if (!token){
+        window.location.href = '/login/';
+        return;
+      }
+      try {
+        const res = await fetch('/auth/me', { headers: { ...authHeaders() } });
+        if (res.status === 401){
+          clearToken();
+          window.location.href = '/login/';
+          return;
+        }
+        if (!res.ok) throw new Error('Failed to load profile');
+        const user = await res.json();
+        newPostLink.style.display = 'inline-flex';
+        if (profileLink) {
+          profileLink.style.display = 'inline-flex';
+          profileLink.href = `/user/${encodeURIComponent(user.handle)}`;
+          const label = (user.display_name || user.handle || '').trim();
+          const defaultLabel = profileLink.dataset.defaultLabel || 'Profile';
+          profileLink.textContent = label || defaultLabel;
+        }
+        welcomeHeading.textContent = `Welcome back, ${user.display_name || user.handle}!`;
+        welcomeSubheading.textContent = `Explore what the community has shared since your last visit, ${user.handle}.`;
+        if (user.is_admin || (Array.isArray(user.roles) && user.roles.includes('admin'))){
+          adminLink.style.display = 'inline-flex';
+        } else {
+          adminLink.style.display = 'none';
+        }
+      } catch (err){
+        clearToken();
+        window.location.href = '/login/';
+        return;
+      }
+      await loadLatestForUser();
+    }
+
+    init();
+  </script>
+</body>
+</html>

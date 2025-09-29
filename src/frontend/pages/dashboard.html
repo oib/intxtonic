@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LangSum • Dashboard</title>
+  <link rel="stylesheet" href="/src/frontend/css/base.css">
+  <link rel="stylesheet" href="/src/frontend/css/components.css">
+  <link rel="stylesheet" href="/src/frontend/css/layout.css">
+  <link rel="stylesheet" href="/src/frontend/css/pages/dashboard.css">
+  <script type="module" src="/src/frontend/js/i18n-runtime.js" data-i18n-init></script>
+</head>
+<body>
+  <header class="site">
+    <div class="inner container nav-3">
+      <div class="left flex ai-c" style="gap:8px">
+        <a id="newpost-link" class="btn" href="/create" style="display:none">New Post</a>
+      </div>
+      <nav class="flex ai-c" style="gap:8px">
+        <a class="btn btn--subtle" href="/" data-i18n="nav.home">Home</a>
+        <a id="profile-link" class="btn btn--subtle" href="#" style="display:none">Profile</a>
+        <a id="login-link" class="btn btn--subtle" href="/login" data-i18n="nav.login">Login</a>
+        <button id="logout-btn" class="btn btn--ghost" style="display:none" data-i18n="nav.logout">Logout</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="row">
+      <div class="col-12">
+        <div class="card">
+          <div class="flex ai-c jc-b mb-6">
+            <h1 data-i18n="dashboard.title">Dashboard</h1>
+            <div class="flex ai-c" style="gap:8px">
+              <input id="q" class="input" placeholder="Search tags..." style="max-width:260px">
+              <button id="btn-search" class="btn btn--subtle" data-i18n="dashboard.search">Search</button>
+            </div>
+          </div>
+          <div id="admin-tools" class="flex ai-c mb-6" style="gap:8px; display:none">
+            <input id="new-tag" class="input" placeholder="New tag label" style="max-width:240px">
+            <button id="btn-create-tag" class="btn">Create tag</button>
+            <span class="badge">Tip: Click a tag to toggle ban</span>
+          </div>
+          <div id="tags" class="tags"></div>
+          <div class="mt-4" style="font-size:12px; color:var(--tx-1)">Hint: Click tags to filter posts; green = active</div>
+          <div class="flex ai-c mb-6" style="gap:8px; margin-top:8px">
+            <div id="active-filters"></div>
+            <button id="clear-filters" class="btn btn--subtle" style="display:none">Clear filters</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="row">
+      <div class="col-12">
+        <div class="card">
+          <div class="flex ai-c jc-b">
+            <h2 data-i18n="dashboard.latest_posts">Latest Posts</h2> <small id="total" style="font-size:12px; color:var(--tx-1);"></small>
+            <div class="flex ai-c" style="gap:8px">
+              <label class="flex ai-c" style="gap:6px">
+                <span class="hide-sm" data-i18n="dashboard.sort">Sort</span>
+                <select id="sort" class="input" style="max-width:140px">
+                  <option value="newest" selected>Newest</option>
+                  <option value="top">Top</option>
+                </select>
+              </label>
+              <input id="q-posts" class="input" placeholder="Search posts..." style="max-width:220px">
+              <button id="btn-post-search" class="btn btn--subtle" type="button">Search</button>
+              <span class="hide-sm" style="font-size:12px; color:var(--tx-1);">Tip: Combines with tag filters</span>
+            </div>
+          </div>
+          <div id="posts" class="posts"></div>
+          <div id="loading-indicator" class="flex ai-c jc-c" style="display:none; margin-top: 20px;">
+            <div class="badge">Loading more posts...</div>
+          </div>
+          <div id="infinite-sentinel"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site">
+    <div class="inner container flex ai-c jc-b">
+      <div>&copy; <span id="year"></span> LangSum</div>
+      <div class="hide-sm">Built with Windsurf guidelines</div>
+    </div>
+  </footer>
+
+  <script type="module">
+    import { authHeaders, getToken, clearToken } from '/src/frontend/js/auth.js';
+    import { showToast } from '/src/frontend/js/toast.js';
+    import { t } from '/src/frontend/js/i18n-runtime.js';
+    import { initBookmarkToggles } from '/src/frontend/js/bookmarks.js';
+
+    document.getElementById('year').textContent = new Date().getFullYear().toString();
+
+    // Guest guard
+    if (!getToken()) { window.location.href = '/login'; }
+
+    // Auth UI
+    const loginLink = document.getElementById('login-link');
+    const logoutBtn = document.getElementById('logout-btn');
+    const profileLink = document.getElementById('profile-link');
+    const newPostHeaderLink = document.getElementById('newpost-link');
+    function refreshAuthUI(){
+      const has = !!getToken();
+      loginLink.style.display = has ? 'none' : 'inline-flex';
+      logoutBtn.style.display = has ? 'inline-flex' : 'none';
+      profileLink.style.display = 'none';
+      const defaultLabel = profileLink.dataset.defaultLabel || profileLink.textContent || 'Profile';
+      profileLink.dataset.defaultLabel = defaultLabel;
+      profileLink.textContent = defaultLabel;
+      if (has) {
+        fetch('/auth/me', { headers: { ...authHeaders() }})
+          .then(r => r.ok ? r.json() : null)
+          .then(u => {
+            if (u && u.handle) {
+              profileLink.href = `/user/${encodeURIComponent(u.handle)}`;
+              const label = (u.display_name || u.handle || '').trim();
+              if (label) profileLink.textContent = label;
+              profileLink.style.display = 'inline-flex';
+            }
+          })
+          .catch(() => {});
+      }
+      if (newPostHeaderLink) newPostHeaderLink.style.display = has ? 'inline-flex' : 'none';
+    }
+    logoutBtn.addEventListener('click', async () => {
+      try { await fetch('/auth/logout', { method: 'POST', headers: { ...authHeaders() } }); } catch {}
+      clearToken();
+      showToast(t('toast.signed_out'),'ok');
+      window.location.href = '/home';
+    });
+    refreshAuthUI();
+
+    // Tag search + list + admin controls
+    const elTags = document.getElementById('tags');
+    const elFilters = document.getElementById('active-filters');
+    const elClearFilters = document.getElementById('clear-filters');
+    let selectedTags = new Set();
+    const elSearch = document.getElementById('q');
+    const elBtn = document.getElementById('btn-search');
+    const elAdmin = document.getElementById('admin-tools');
+    const elNewTag = document.getElementById('new-tag');
+    const elCreateTag = document.getElementById('btn-create-tag');
+    let isAdmin = false;
+
+    async function loadMe(){
+      try{
+        const res = await fetch('/auth/me', { headers:{ ...authHeaders() }});
+        if(res.status === 401){
+          clearToken();
+          window.location.href = '/login';
+          return;
+        }
+        if(!res.ok) return;
+        const me = await res.json();
+        isAdmin = !!me?.is_admin;
+        elAdmin.style.display = isAdmin ? 'flex' : 'none';
+      }catch(e){ /* ignore */ }
+    }
+
+    async function loadTags(query=""){
+      elTags.innerHTML = '<div class="badge">Loading…</div>';
+      try{
+        const url = query ? `/tags?query=${encodeURIComponent(query)}` : '/tags';
+        const res = await fetch(url, { headers:{ ...authHeaders() }});
+        if(res.status === 401){
+          clearToken();
+          window.location.href = '/login';
+          return;
+        }
+        if(!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        if(!Array.isArray(data)) throw new Error('Unexpected response');
+        elTags.innerHTML = data.length ? data.map(t => 
+          `<button class="badge tag${selectedTags.has(t.slug) ? ' badge--ok' : ''}" data-slug="${t.slug}" data-id="${t.id}" data-banned="${t.is_banned}" title="${isAdmin ? (t.is_banned ? `${t.label} — Alt+Click to unban` : `${t.label} — Alt+Click to ban`) : t.label}">${t.label}</button>`
+        ).join(' ') : '<div class="badge">No tags</div>';
+        // Toggle filter on any tag click
+        elTags.querySelectorAll('button.tag').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const slug = btn.getAttribute('data-slug');
+            if(selectedTags.has(slug)) selectedTags.delete(slug); else selectedTags.add(slug);
+            renderFilters();
+            // Toggle visual state
+            btn.classList.toggle('badge--ok', selectedTags.has(slug));
+            // Reset pagination when filters change
+            cursor = null;
+            loadPosts();
+          });
+        });
+        if(isAdmin){
+          elTags.querySelectorAll('button.badge').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+              // Admin action only on Alt+Click to avoid interfering with normal filter toggling
+              if(!e.altKey) return;
+              e.preventDefault();
+              e.stopPropagation();
+              const id = btn.getAttribute('data-id');
+              const banned = btn.getAttribute('data-banned') === 'true';
+              const endpoint = banned ? `/tags/${id}/unban` : `/tags/${id}/ban`;
+              try{
+                const res2 = await fetch(endpoint, { method:'POST', headers:{ ...authHeaders() }});
+                if(!res2.ok) throw new Error(await res2.text());
+                showToast(banned ? t('toast.tag_unbanned') : t('toast.tag_banned'),'ok');
+                loadTags(elSearch.value);
+              }catch(err){ showToast(t('toast.error'),'err'); }
+            });
+          });
+        }
+      }catch(err){
+        elTags.innerHTML = '<div class="badge badge--err">Failed to load tags</div>';
+        showToast(t('toast.load_failed'),'err');
+      }
+    }
+
+    elBtn.addEventListener('click', () => loadTags(elSearch.value));
+    elSearch.addEventListener('keydown', (e) => { if(e.key==='Enter'){ loadTags(elSearch.value); }});
+    elCreateTag.addEventListener('click', async () => {
+      if(!isAdmin) return;
+      const label = elNewTag.value.trim();
+      if(!label){ showToast('Enter a tag label','warn'); return; }
+      try{
+        const res = await fetch('/tags', { method:'POST', headers:{ 'Content-Type':'application/json', ...authHeaders() }, body: JSON.stringify({ label }) });
+        if(!res.ok) throw new Error(await res.text());
+        elNewTag.value = '';
+        showToast(t('toast.saved'),'ok');
+        loadTags();
+      }catch(err){ showToast(t('toast.error'),'err'); }
+    });
+
+    // Posts list
+    const elPosts = document.getElementById('posts');
+    const elSort = document.getElementById('sort');
+    const elQPosts = document.getElementById('q-posts');
+    const elBtnPostSearch = document.getElementById('btn-post-search');
+    const elLoadMore = document.getElementById('load-more');
+    const elLoadingIndicator = document.getElementById('loading-indicator');
+    const elTotal = document.getElementById('total');
+    let cursor = null; // Use cursor for infinite scroll
+    let isLoadingMore = false;
+    let queryPosts = '';
+    function escapeHtml(str){
+      if(!str) return '';
+      return str
+        .replace(/&/g,'&amp;')
+        .replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;');
+    }
+    function formatHighlight(snippet){
+      if(!snippet) return '';
+      const escaped = snippet
+        .replace(/&/g,'&amp;')
+        .replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;');
+      return escaped
+        .replace(/&lt;b&gt;/g,'<mark>')
+        .replace(/&lt;\/b&gt;/g,'</mark>');
+    }
+    function buildSnippet(post){
+      if(post.highlight){
+        return formatHighlight(post.highlight);
+      }
+      const raw = escapeHtml(post.body_md || '').replace(/\s+/g,' ').trim();
+      if(!raw) return '';
+      return raw.length > 220 ? `${raw.slice(0, 220).trimEnd()}…` : raw;
+    }
+    function renderFilters(){
+      const arr = Array.from(selectedTags);
+      elFilters.innerHTML = arr.length ? arr.map(s => `<span class="badge anim-in">#${s} <button class="btn btn--ghost rm-filter" data-slug="${s}" title="Remove">×</button></span>`).join(' ') : '';
+      elClearFilters.style.display = arr.length ? 'inline-flex' : 'none';
+      // Persist selected tags
+      try{ localStorage.setItem('ls_selected_tags', JSON.stringify(Array.from(selectedTags))); }catch(e){}
+      // Bind remove buttons
+      elFilters.querySelectorAll('button.rm-filter').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const slug = btn.getAttribute('data-slug');
+          if(selectedTags.has(slug)){
+            selectedTags.delete(slug);
+            renderFilters();
+            // Reset pagination when filters change
+            cursor = null;
+            loadPosts();
+          }
+        });
+      });
+    }
+
+    async function loadPosts(append=false, initial=false){
+      if(isLoadingMore && append) return;
+      isLoadingMore = append;
+      if(initial || !append) {
+        elPosts.innerHTML = '<div class="skeleton"></div>'.repeat(5); // Show skeletons on initial or filter change
+      } else {
+        elLoadingIndicator.style.display = 'flex'; // Show loading on append
+      }
+      try{
+        const params = new URLSearchParams({ sort: elSort.value });
+        if(queryPosts && queryPosts.trim()) params.set('q', queryPosts.trim());
+        // Apply tag filters
+        for(const s of selectedTags){ params.append('tag', s); }
+        if(append && cursor) params.set('cursor', cursor); else params.set('limit', '10'); // Use limit for initial, cursor for subsequent
+        const res = await fetch(`/posts?${params.toString()}`, { headers:{ ...authHeaders() } });
+        if(res.status === 401){
+          // Session expired or invalid. Stop infinite scroll and redirect to login.
+          try{ const sentinel = document.getElementById('infinite-sentinel'); sentinel && io.unobserve(sentinel); }catch{}
+          clearToken();
+          showToast('Session expired. Please sign in again','warn');
+          window.location.href = '/login';
+          return;
+        }
+        if(!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        const items = Array.isArray(data.items) ? data.items : [];
+        const total = typeof data.total === 'number' ? data.total : undefined;
+        cursor = data.next_cursor || null; // Update cursor for next load
+        if(elTotal){
+          if(typeof total === 'number'){
+            const cleanedQuery = (queryPosts || '').trim();
+            if(cleanedQuery){
+              elTotal.textContent = `${total} result${total === 1 ? '' : 's'} for "${cleanedQuery}"`;
+            } else {
+              elTotal.textContent = `${total} post${total === 1 ? '' : 's'}`;
+            }
+          } else {
+            elTotal.textContent = '';
+          }
+        }
+        const markup = items.length ? items.map(p => `
+          <article class="post">
+            <h3><a href="/post/${p.id}">${p.title}</a></h3>
+            <div class="meta">by ${p.author ? `<a href="/user/${encodeURIComponent(p.author)}">${p.author}</a>` : 'unknown'} · ${new Date(p.created_at).toLocaleString()}</div>
+            <div class="flex" style="gap:6px; flex-wrap:wrap; margin:.5rem 0;">
+              ${Array.isArray(p.tags) && p.tags.length ? p.tags.map(t => `<button class="badge chip-tag${selectedTags.has(t.slug) ? ' badge--ok' : ''}" data-slug="${t.slug}">#${t.slug}</button>`).join('') : ''}
+            </div>
+            ${(() => {
+              const snippet = buildSnippet(p);
+              if(!snippet) return '';
+              return `<p class="post-snippet">${snippet}</p>`;
+            })()}
+            <div class="flex ai-c" style="gap:8px">
+              <button class="bookmark-toggle" data-target-type="post" data-target-id="${p.id}" aria-label="Bookmark post"></button>
+              <span class="badge">Score: <span class="score" data-id="${p.id}">${p.score ?? 0}</span></span>
+              <button class="btn btn--subtle report-post" data-id="${p.id}">Report</button>
+            </div>
+          </article>
+        `).join('') : '';
+        if(initial || !append) {
+          elPosts.innerHTML = markup || '<div class="badge">No posts yet</div>';
+        } else {
+          elPosts.insertAdjacentHTML('beforeend', markup);
+        }
+        initBookmarkToggles(elPosts);
+        // Handle end of results
+        if(!cursor || items.length < 10) {
+          // Optionally hide sentinel or show 'No more posts'
+          const sentinel = document.getElementById('infinite-sentinel');
+          sentinel && io.unobserve(sentinel); // Stop observing if no more data
+        } else {
+          const sentinel = document.getElementById('infinite-sentinel');
+          if(sentinel) io.observe(sentinel);
+        }
+      }catch(err){
+        console.error(`Error in loadPosts:`, err);
+        elPosts.innerHTML = '<div class="badge badge--err">Failed to load posts</div>';
+        showToast(t('toast.load_failed'),'err');
+      } finally {
+        isLoadingMore = false;
+        elLoadingIndicator.style.display = 'none';
+      }
+    }
+
+    elSort.addEventListener('change', () => { cursor = null; loadPosts(); });
+    elClearFilters.addEventListener('click', () => { selectedTags.clear(); renderFilters(); cursor = null; loadPosts(); });
+    elBtnPostSearch.addEventListener('click', () => {
+      queryPosts = elQPosts.value || '';
+      try{ localStorage.setItem('ls_query_posts', queryPosts); }catch(e){}
+      cursor = null; loadPosts();
+    });
+    elQPosts.addEventListener('keydown', (e) => {
+      if(e.key==='Enter'){
+        queryPosts = elQPosts.value || '';
+        try{ localStorage.setItem('ls_query_posts', queryPosts); }catch(e){}
+        cursor = null; loadPosts();
+      }
+    });
+
+    // Infinite scroll observer
+    const io = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && !isLoadingMore && cursor !== null) {
+        loadPosts(true);
+      }
+    }, { root: null, rootMargin: '0px 0px 200px 0px', threshold: 0.1 });
+    const sentinel = document.getElementById('infinite-sentinel');
+    if(sentinel) io.observe(sentinel);
+
+    // Report helper and handlers
+    async function reportContent(targetId){
+      if(!getToken()){ showToast('Login to report','warn'); return; }
+      const reason = prompt('Reason for report (optional):', '');
+      try{
+        const res = await fetch('/moderation/report', {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json', ...authHeaders() },
+          body: JSON.stringify({ target_type: 'post', target_id: targetId, reason })
+        });
+        if(!res.ok){
+          const txt = await res.text();
+          try{ const j = JSON.parse(txt); showToast(String(j?.detail || txt || 'Report failed'), 'err'); }
+          catch{ showToast('Report failed','err'); }
+          return;
+        }
+        showToast('Reported', 'ok');
+      }catch(err){ showToast('Report failed','err'); }
+    }
+    elPosts.addEventListener('click', (e) => {
+      if(e.target.classList.contains('report-post')){
+        const id = e.target.getAttribute('data-id');
+        reportContent(id);
+        return;
+      }
+      if(e.target.classList.contains('chip-tag')){
+        const slug = e.target.getAttribute('data-slug');
+        if(!slug) return;
+        selectedTags = new Set([slug]);
+        renderFilters();
+        cursor = null;
+        loadPosts();
+        loadTags(elSearch.value);
+        if(typeof window !== 'undefined'){
+          try{
+            const usp = new URLSearchParams(location.search);
+            usp.set('tags', slug);
+            history.replaceState(null, '', `${location.pathname}?${usp.toString()}`);
+          }catch{}
+        }
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    });
+
+    // ESC clears filters
+    window.addEventListener('keydown', (e) => {
+      if(e.key === 'Escape'){
+        if(selectedTags.size){
+          selectedTags.clear();
+          renderFilters();
+          loadPosts();
+        }
+      }
+    });
+
+    await loadMe();
+    await loadTags();
+    // Preselect from URL ?tags=slug1,slug2 and ?q=search
+    const usp = new URLSearchParams(location.search);
+    const tagsParam = usp.get('tags');
+    const qParam = usp.get('q');
+    if(tagsParam){
+      for(const s of tagsParam.split(',')){
+        if(s && s.trim()) selectedTags.add(s.trim());
+      }
+      renderFilters();
+    }
+    if(qParam){
+      queryPosts = qParam; if(elQPosts) elQPosts.value = qParam;
+    } else {
+      // Restore from localStorage if URL doesn't specify
+      try{
+        const savedQ = localStorage.getItem('ls_query_posts') || '';
+        if(savedQ){ queryPosts = savedQ; if(elQPosts) elQPosts.value = savedQ; }
+        const savedTags = JSON.parse(localStorage.getItem('ls_selected_tags') || '[]');
+        if(Array.isArray(savedTags) && savedTags.length){ savedTags.forEach(s => selectedTags.add(s)); renderFilters(); }
+      }catch(e){}
+    }
+    await loadPosts(true, true);
+  </script>
+</body>
+</html>

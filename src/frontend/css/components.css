@@ -1,0 +1,63 @@
+/* Components: buttons, inputs, badges, toasts */
+
+/* Buttons */
+.btn{ display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  border-radius:var(--r-1); padding:10px 16px; border:1px solid transparent; cursor:pointer;
+  background:var(--pri); color:#111; font-weight:600; text-align:center; }
+.btn:hover{ filter:brightness(1.05); }
+.btn--subtle{ background:transparent; color:var(--tx-0); border-color:rgba(185,236,255,.2); }
+.btn--ghost{ background:transparent; color:var(--pri); border-color:transparent; }
+.btn:disabled{ opacity:.6; cursor:not-allowed; }
+
+/* Navigation utilities */
+nav > #logout-btn{ margin-left:auto; }
+
+/* Inputs */
+.input{ width:100%; background:#0e1319; color:var(--tx-0);
+  border:1px solid rgba(185,236,255,.18); border-radius:var(--r-1);
+  padding:12px 14px; }
+.input::placeholder{ color:#6f7b86; }
+
+/* Badges */
+.badge{ display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; border:1px solid rgba(185,236,255,.2); }
+.badge--ok{ color:#0c2; border-color:rgba(61,220,151,.4); }
+.badge--warn{ color:#fc0; border-color:rgba(255,204,0,.4); }
+.badge--err{ color:#f66; border-color:rgba(255,77,77,.4); }
+
+/* Bookmark toggle */
+.bookmark-toggle{
+  width:32px;
+  height:32px;
+  padding:0;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border:none;
+  background:transparent url('/src/frontend/assets/icons/star-outline.svg') center/22px 22px no-repeat;
+  cursor:pointer;
+  transition:transform .15s ease, filter .15s ease;
+}
+.bookmark-toggle:hover{
+  transform:scale(1.1);
+  filter:drop-shadow(0 0 4px rgba(255,215,0,.35));
+}
+.bookmark-toggle:focus-visible{
+  outline:2px solid rgba(255,255,255,.6);
+  outline-offset:2px;
+}
+.bookmark-toggle.is-active{
+  background-image:url('/src/frontend/assets/icons/star-filled.svg');
+  filter:drop-shadow(0 0 6px rgba(255,215,0,.5));
+}
+
+/* Toasts */
+#toast-root{ position:fixed; left:50%; bottom:max(16px, env(safe-area-inset-bottom)); transform:translateX(-50%); z-index:9999; }
+.toast{ background:var(--bg-1); color:var(--tx-0);
+  border:1px solid rgba(185,236,255,.2); padding:var(--s-5) var(--s-6);
+  border-radius:var(--r-2); box-shadow:0 10px 30px rgba(0,0,0,.35);
+  margin-bottom:var(--s-4); max-width:min(420px, 90vw);
+  opacity:0; translate:0 8px; animation:toast-in .24s ease-out forwards; }
+.toast--ok{ border-color:rgba(61,220,151,.35); }
+.toast--warn{ border-color:rgba(255,204,0,.35); }
+.toast--err{ border-color:rgba(255,77,77,.35); }
+@keyframes toast-in{ to{ opacity:1; translate:0 0; } }

@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LangSum • Register</title>
+  <link rel="stylesheet" href="/src/frontend/css/base.css">
+  <link rel="stylesheet" href="/src/frontend/css/components.css">
+  <link rel="stylesheet" href="/src/frontend/css/layout.css">
+  <link rel="stylesheet" href="/src/frontend/css/pages/login.css">
+</head>
+<body>
+  <main class="container" style="min-height:100dvh; display:grid; place-items:center;">
+    <section class="card" style="max-width:460px; width:100%;">
+      <h1 class="mb-6">Create your account</h1>
+      <form id="register-form" class="grid" style="gap:16px">
+        <label>
+          <div class="mb-6">Handle</div>
+          <input id="inp-handle" class="input" type="text" placeholder="username" autocomplete="username" required>
+        </label>
+        <label>
+          <div class="mb-6">Email</div>
+          <input id="inp-email" class="input" type="email" placeholder="you@example.com" autocomplete="email" required>
+        </label>
+        <label>
+          <div class="mb-6">Password</div>
+          <input id="inp-pass" class="input" type="password" placeholder="••••••••" autocomplete="new-password" required minlength="8">
+        </label>
+        <label>
+          <div class="mb-6">Confirm password</div>
+          <input id="inp-pass-confirm" class="input" type="password" placeholder="••••••••" autocomplete="new-password" required minlength="8">
+        </label>
+        <button class="btn" type="submit">Sign up</button>
+        <div id="form-msg" class="badge" style="display:none"></div>
+      </form>
+      <div id="register-success" class="card" style="margin-top:16px; display:none; background:rgba(185,236,255,0.04); border:1px solid rgba(185,236,255,0.12);">
+        <h2 style="margin-top:0">Almost there!</h2>
+        <p id="success-text" class="hint" style="margin-bottom:12px; color:var(--tx-1)">
+          We sent a confirmation link to your inbox. Please verify your email to unlock posting and voting.
+        </p>
+        <div class="flex" style="gap:8px; flex-wrap:wrap;">
+          <button id="btn-open-mail" class="btn btn--subtle" type="button">Open mail app</button>
+          <button id="btn-resend" class="btn" type="button">Resend confirmation</button>
+          <a href="/login" class="btn btn--ghost">Back to login</a>
+        </div>
+        <p class="hint" style="margin-top:12px; color:var(--tx-1)">
+          Didn’t get the email? Check spam, then click Resend. The link expires in 24 hours.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    import { register, resendConfirmation } from '/src/frontend/js/auth.js';
+    import { showToast } from '/src/frontend/js/toast.js';
+
+    const form = document.getElementById('register-form');
+    const formMsg = document.getElementById('form-msg');
+    const successBox = document.getElementById('register-success');
+    const successText = document.getElementById('success-text');
+    const btnOpenMail = document.getElementById('btn-open-mail');
+    const btnResend = document.getElementById('btn-resend');
+
+    btnOpenMail.addEventListener('click', () => {
+      window.location.href = 'mailto:';
+    });
+
+    async function handleResend(){
+      btnResend.disabled = true;
+      try {
+        await resendConfirmation();
+        showToast('Confirmation email resent', 'ok');
+      } catch (err) {
+        console.error('Resend failed', err);
+        showToast('Unable to resend right now', 'warn');
+      } finally {
+        setTimeout(() => { btnResend.disabled = false; }, 4000);
+      }
+    }
+
+    btnResend.addEventListener('click', handleResend);
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      formMsg.style.display = 'none';
+      const handle = document.getElementById('inp-handle').value.trim();
+      const email = document.getElementById('inp-email').value.trim();
+      const pass = document.getElementById('inp-pass').value;
+      const passConfirm = document.getElementById('inp-pass-confirm').value;
+
+      if (pass !== passConfirm) {
+        formMsg.textContent = 'Passwords do not match';
+        formMsg.className = 'badge badge--warn';
+        formMsg.style.display = 'inline-block';
+        return;
+      }
+      if (pass.length < 8) {
+        formMsg.textContent = 'Password must be at least 8 characters';
+        formMsg.className = 'badge badge--warn';
+        formMsg.style.display = 'inline-block';
+        return;
+      }
+      try {
+        await register(handle, email, pass);
+        showToast('Account created. Check your email.', 'ok');
+        successText.textContent = `We sent a confirmation link to ${email}. Please verify your email to unlock posting and voting.`;
+        successBox.style.display = 'block';
+        form.style.display = 'none';
+      } catch (err) {
+        console.error('Registration failed', err);
+        formMsg.textContent = 'Registration failed. Handle or email may already be in use.';
+        formMsg.className = 'badge badge--err';
+        formMsg.style.display = 'inline-block';
+        showToast('Unable to register', 'err');
+      }
+    });
+  </script>
+</body>
+</html>

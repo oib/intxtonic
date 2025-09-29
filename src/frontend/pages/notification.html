@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LangSum • Notifications</title>
+  <link rel="stylesheet" href="/src/frontend/css/base.css">
+  <link rel="stylesheet" href="/src/frontend/css/components.css">
+  <link rel="stylesheet" href="/src/frontend/css/layout.css">
+  <link rel="stylesheet" href="/src/frontend/css/pages/home.css">
+  <style>
+    .notif-header {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:1rem;
+      flex-wrap:wrap;
+    }
+    .notif-list {
+      display:grid;
+      gap:1rem;
+      margin-top:1.5rem;
+    }
+    .notif-item {
+      border:1px solid rgba(185,236,255,.12);
+      border-radius:12px;
+      padding:1rem 1.25rem;
+      background:var(--bg-2);
+      box-shadow:0 8px 16px rgba(0,0,0,0.12);
+      display:flex;
+      flex-direction:column;
+      gap:0.5rem;
+    }
+    .notif-item.is-read {
+      opacity:0.75;
+    }
+    .notif-kind {
+      font-size:0.85rem;
+      text-transform:uppercase;
+      letter-spacing:0.08em;
+      color:var(--tx-2);
+    }
+    .notif-time {
+      font-size:0.85rem;
+      color:var(--tx-2);
+    }
+    .notif-actions {
+      display:flex;
+      gap:0.75rem;
+      flex-wrap:wrap;
+    }
+    .notif-empty {
+      text-align:center;
+      padding:2rem 1rem;
+      color:var(--tx-2);
+    }
+  </style>
+  <script type="module" src="/src/frontend/js/i18n-runtime.js" data-i18n-init></script>
+</head>
+<body>
+  <header class="site">
+    <div class="inner container nav-3">
+      <div class="left flex ai-c" style="gap:8px">
+        <a class="btn btn--subtle" href="/dashboard/" data-i18n="nav.dashboard">Dashboard</a>
+        <a class="btn btn--subtle" href="/tags/top">Top Tags</a>
+      </div>
+      <nav class="flex ai-c" style="gap:8px">
+        <a class="btn btn--subtle" href="/" data-i18n="nav.home">Home</a>
+        <a class="btn btn--ghost" href="/notifications" aria-label="Notifications">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 7h18s-3 0-3-7" />
+            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+          </svg>
+        </a>
+        <a id="profile-link" class="btn btn--subtle" href="#" style="display:none" data-i18n="nav.profile">Profile</a>
+        <button id="logout-btn" class="btn btn--ghost" data-i18n="nav.logout">Logout</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <div class="notif-header">
+        <div>
+          <h1 style="margin:0" data-i18n="notifications.title">Notifications</h1>
+          <p class="hint" data-i18n="notifications.subtitle">Stay up to date with activity related to your posts and account.</p>
+        </div>
+        <div class="notif-actions">
+          <button id="refresh-btn" class="btn btn--subtle" data-i18n="notifications.refresh">Refresh</button>
+        </div>
+      </div>
+      <div id="status" class="hint" style="margin-top:0.75rem"></div>
+      <div id="notifications" class="notif-list" role="list">
+        <div class="notif-empty">Loading notifications…</div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site">
+    <div class="inner container flex ai-c jc-b">
+      <div> <span id="year"></span> LangSum</div>
+      <div class="hide-sm">Built with Windsurf guidelines</div>
+    </div>
+  </footer>
+
+  <script type="module">
+    import { authHeaders, getToken, clearToken } from '/src/frontend/js/auth.js';
+    import { showToast } from '/src/frontend/js/toast.js';
+
+    document.getElementById('year').textContent = new Date().getFullYear().toString();
+
+    const profileLink = document.getElementById('profile-link');
+    const logoutBtn = document.getElementById('logout-btn');
+    const refreshBtn = document.getElementById('refresh-btn');
+    const statusEl = document.getElementById('status');
+    const notificationsEl = document.getElementById('notifications');
+
+    if (profileLink) {
+      const defaultLabel = profileLink.dataset.defaultLabel || profileLink.textContent || 'Profile';
+      profileLink.dataset.defaultLabel = defaultLabel;
+      profileLink.textContent = defaultLabel;
+      profileLink.style.display = 'none';
+    }
+
+    logoutBtn.addEventListener('click', async () => {
+      try { await fetch('/auth/logout', { method: 'POST', headers: { ...authHeaders() } }); } catch {}
+      clearToken();
+      showToast('Signed out','ok');
+      window.location.href = '/';
+    });
+
+    async function ensureAuthenticated(){
+      const token = getToken();
+      if(!token){ window.location.href = '/login/'; return null; }
+      try{
+        const res = await fetch('/auth/me', { headers: { ...authHeaders() } });
+        if(res.status === 401){
+          clearToken();
+          window.location.href = '/login/';
+          return null;
+        }
+        if(!res.ok) throw new Error('Failed profile');
+        const user = await res.json();
+        if (profileLink) {
+          profileLink.style.display = 'inline-flex';
+          profileLink.href = `/user/${encodeURIComponent(user.handle)}`;
+          const label = (user.display_name || user.handle || '').trim();
+          if (label) profileLink.textContent = label;
+        }
+        return user;
+      }catch(err){
+        showToast('Failed to load profile','err');
+        window.location.href = '/login/';
+        return null;
+      }
+    }
+
+    function renderNotifications(items){
+      if(!Array.isArray(items) || !items.length){
+        notificationsEl.innerHTML = '<div class="notif-empty">No notifications yet. Activity will appear here.</div>';
+        statusEl.textContent = 'Nothing new right now';
+        return;
+      }
+      notificationsEl.innerHTML = items.map(item => {
+        const created = item.created_at ? new Date(item.created_at).toLocaleString() : '';
+        const payload = item.payload || {};
+        const message = payload.message || payload.detail || JSON.stringify(payload);
+        const refLink = item.ref_type && item.ref_id ? buildRefLink(item.ref_type, item.ref_id) : null;
+        return `
+          <article class="notif-item${item.is_read ? ' is-read' : ''}" role="listitem">
+            <div class="notif-kind">${item.kind}</div>
+            <div>${message || ''}</div>
+            <div class="notif-time">${created}</div>
+            ${refLink ? `<div><a class="link" href="${refLink}">View details</a></div>` : ''}
+          </article>
+        `;
+      }).join('');
+      statusEl.textContent = `Showing ${items.length} notification${items.length === 1 ? '' : 's'}`;
+    }
+
+    function buildRefLink(refType, refId){
+      if(refType === 'post'){ return `/post/${encodeURIComponent(refId)}`; }
+      if(refType === 'reply'){ return `/post/${encodeURIComponent(refId)}#reply-${encodeURIComponent(refId)}`; }
+      if(refType === 'tag'){ return `/tags/${encodeURIComponent(refId)}`; }
+      return '#';
+    }
+
+    async function loadNotifications(){
+      notificationsEl.innerHTML = '<div class="notif-empty">Loading notifications…</div>';
+      statusEl.textContent = '';
+      try{
+        const res = await fetch('/notify/list', { headers: { ...authHeaders() } });
+        if(res.status === 401){
+          clearToken();
+          window.location.href = '/login/';
+          return;
+        }
+        if(!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        renderNotifications(data);
+      }catch(err){
+        console.error('Failed to load notifications', err);
+        notificationsEl.innerHTML = '<div class="notif-empty">Unable to load notifications right now.</div>';
+        statusEl.textContent = '';
+        showToast('Failed to load notifications','err');
+      }
+    }
+
+    refreshBtn.addEventListener('click', () => loadNotifications());
+
+    (async () => {
+      const user = await ensureAuthenticated();
+      if(!user) return;
+      await loadNotifications();
+    })();
+  </script>
+</body>
+</html>
