@@ -14,7 +14,7 @@ def _unique_handle(prefix: str) -> str:
 
 async def _register_user(client: httpx.AsyncClient, password: str) -> tuple[str, str, str]:
     handle = _unique_handle("pwduser")
-    email = f"{handle}@example.com"
+    email = f"{handle}@intxtonic.net"
     response = await client.post(
         "/auth/register",
         json={

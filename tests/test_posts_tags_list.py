@@ -45,7 +45,7 @@ async def test_posts_include_tags_and_filtering():
         # Create admin user
         r = await client.post("/auth/register", json={
             "handle": "tagadmin",
-            "email": "tagadmin@example.com",
+            "email": "tagadmin@intxtonic.net",
             "password": "TagAdmin123"
         })
         assert r.status_code == 200, r.text
@@ -70,7 +70,7 @@ async def test_posts_include_tags_and_filtering():
         # Create 2 posts (user bob)
         r = await client.post("/auth/register", json={
             "handle": "tagbob",
-            "email": "tagbob@example.com",
+            "email": "tagbob@intxtonic.net",
             "password": "TagBob123"
         })
         assert r.status_code == 200

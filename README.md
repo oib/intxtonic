@@ -1,6 +1,6 @@
-# LangSum
+# inTxTonic
 
-A multilingual, tag‑centric blogging platform. Mobile‑first frontend, FastAPI backend, PostgreSQL database.
+An inTxTonic multilingual, tag‑centric blogging platform. Mobile‑first frontend, FastAPI backend, PostgreSQL database.
 
 ## Local Development
 

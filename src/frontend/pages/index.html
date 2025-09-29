@@ -3,17 +3,28 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LangSum • Home</title>
+  <title>inTxTonic • Home</title>
   <link rel="stylesheet" href="/src/frontend/css/base.css">
   <link rel="stylesheet" href="/src/frontend/css/components.css">
   <link rel="stylesheet" href="/src/frontend/css/layout.css">
-  <link rel="stylesheet" href="/src/frontend/css/pages/home.css">
+  <link rel="stylesheet" href="/src/frontend/css/pages/index.css">
   <script type="module" src="/src/frontend/js/i18n-runtime.js" data-i18n-init></script>
 </head>
 <body>
   <header class="site">
     <div class="inner container nav-3">
-      <div class="left"></div>
+      <div class="left">
+        <label class="lang-picker" for="landing-lang">
+          <span class="visually-hidden">Select language</span>
+          <select id="landing-lang" aria-label="Select language">
+            <option value="en">English</option>
+            <option value="de">Deutsch</option>
+            <option value="es">Español</option>
+            <option value="fr">Français</option>
+            <option value="ja">日本語</option>
+          </select>
+        </label>
+      </div>
       <nav class="flex ai-c" style="gap:8px">
         <a class="btn btn--subtle" href="/login/" data-i18n="nav.login">Login</a>
       </nav>
@@ -21,35 +32,94 @@
   </header>
 
   <main class="container">
-    <section id="hero" class="hero card">
-      <h1 data-i18n="home.welcome_title">Welcome to LangSum</h1>
-      <p class="mb-6" data-i18n="home.welcome_tagline">
-        <strong>Break language barriers in blogging.</strong> LangSum is an intelligent, multilingual platform that uses AI to translate and summarize content, making global knowledge accessible to everyone.
-      </p>
-      <div class="hero-features">
-        <div class="feature-item">
-          <strong>🌐 Multilingual</strong> - Read and understand posts in any language
-        </div>
-        <div class="feature-item">
-          <strong>🤖 AI-Powered</strong> - Instant translation and summarization
-        </div>
-        <div class="feature-item">
-          <strong>🏷️ Tag-Centric</strong> - Discover content through smart categorization
-        </div>
-        <div class="feature-item">
-          <strong>📱 Mobile-First</strong> - Optimized for all devices
+    <section id="hero" class="hero card hero-card">
+      <div class="hero-card__body">
+        <h1 data-i18n="home.welcome_title">Welcome to intxtonic</h1>
+        <p class="mb-6" data-i18n="home.welcome_tagline">
+          <strong>Break language barriers in blogging.</strong> intxtonic is a self-hosted multilingual stack that lets you add UI languages on demand while translating and summarizing every post without relying on third-party services.
+        </p>
+        <div class="hero-cta">
+          <p><em>Ready to explore? <a href="/login/" class="link">Sign in</a> to start discovering content or continue browsing as a guest.</em></p>
         </div>
       </div>
-      <div class="hero-cta">
-        <p><em>Ready to explore? <a href="/login/" class="link">Sign in</a> to start discovering content or continue browsing as a guest.</em></p>
+      <div class="hero-card__illustration">
+        <img src="/src/frontend/assets/topics/hero.jpg" alt="Neon doorway symbolizing access to multilingual knowledge" loading="lazy">
       </div>
     </section>
+
+    <section class="topics card">
+      <div class="topics-head">
+        <h2>Discover topics</h2>
+        <p class="hint">intxtonic currently supports 24+ languages through AI-assisted translation and community localization.</p>
+      </div>
+      <div class="topics-grid">
+        <article class="topic-card topic-card--culture">
+          <div class="topic-card__body">
+            <h3>Culture &amp; Language</h3>
+            <p>Stories, idioms, and cultural notes localized across every interface string, so communities see the UI and content in their language the moment you ship it.</p>
+            <div class="topic-meta">Focus tags: `culture`, `localization`, `intl`</div>
+            <a href="/tags/culture" class="link">Explore culture</a>
+          </div>
+          <div class="topic-card__illustration" role="presentation" aria-hidden="true"></div>
+        </article>
+        <article class="topic-card topic-card--tech">
+          <div class="topic-card__body">
+            <h3>Tech Briefings</h3>
+            <p>Self-hosted AI pipelines translate and summarize engineering updates instantly, keeping your data in-house while surfacing insights to multilingual teams.</p>
+            <div class="topic-meta">Focus tags: `translation`, `summaries`, `ai`</div>
+            <a href="/tags/technology" class="link">Explore tech</a>
+          </div>
+          <div class="topic-card__illustration" role="presentation" aria-hidden="true"></div>
+        </article>
+        <article class="topic-card topic-card--policy">
+          <div class="topic-card__body">
+            <h3>Policy &amp; Society</h3>
+            <p>Compliance updates and civic briefs stay synchronized across regions with automatic localization, ensuring stakeholders never miss critical regulatory context.</p>
+            <div class="topic-meta">Focus tags: `policy`, `compliance`, `regions`</div>
+          </div>
+          <div class="topic-card__illustration" role="presentation" aria-hidden="true"></div>
+        </article>
+        <article class="topic-card topic-card--learning">
+          <div class="topic-card__body">
+            <h3>Localization Ops</h3>
+            <p>Deploy new locales with config-driven workflows, preview UI translations, and run automated QA to guarantee parity across devices.</p>
+            <div class="topic-meta">Focus tags: `localization`, `ops`, `automation`</div>
+            <a href="/tags/localization" class="link">Explore localization</a>
+          </div>
+          <div class="topic-card__illustration" role="presentation" aria-hidden="true"></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="features card">
+      <div class="features-head">
+        <h2>Why teams self-host intxtonic</h2>
+        <p class="hint">Own your language stack end-to-end—translate content, localize the UI, and summarize insights without sending data to external vendors.</p>
+      </div>
+      <div class="features-grid">
+        <article class="feature-card">
+          <h3>Self-hosted translation engine</h3>
+          <p>Ship automatic translations and summaries powered by on-premise AI models, keeping proprietary data inside your infrastructure.</p>
+        <article class="feature-card">
+          <h3>Configurable UI localization</h3>
+          <p>Manage interface strings, locales, and fallback rules from a single dashboard, with instant previews before rollout.</p>
+        </article>
+        <article class="feature-card">
+          <h3>Governance &amp; compliance controls</h3>
+          <p>Apply policy-specific tagging, audit trails, and retention rules so global teams stay aligned with regional regulations.</p>
+        </article>
+        <article class="feature-card">
+          <h3>Developer-first workflow</h3>
+          <p>Versioned APIs, webhooks, and CLI tooling integrate localization into CI/CD, automating releases across languages.</p>
+        </article>
+      </div>
+    </section>
+
   </main>
 
   <footer class="site">
     <div class="inner container flex ai-c jc-b">
-      <div> <span id="year"></span> LangSum</div>
-      <div class="hide-sm">Built with Windsurf guidelines</div>
+      <div> <span id="year"></span> inTxTonic</div>
     </div>
   </footer>
 

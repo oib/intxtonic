@@ -57,7 +57,7 @@ async def ensure_authenticated_headers(client: AsyncClient, *, handle: str | Non
     password = password or "Search123!"
     register_resp = await client.post(
         "/auth/register",
-        json={"handle": handle, "email": f"{handle}@example.com", "password": password},
+        json={"handle": handle, "email": f"{handle}@intxtonic.net", "password": password},
     )
     assert register_resp.status_code in (200, 409), register_resp.text
     login_resp = await client.post(
@@ -95,7 +95,7 @@ async def test_search_posts_multiple_tags(client: AsyncClient):
     admin_password = "TagAdmin123"
     register_resp = await client.post(
         "/auth/register",
-        json={"handle": admin_handle, "email": f"{admin_handle}@example.com", "password": admin_password},
+        json={"handle": admin_handle, "email": f"{admin_handle}@intxtonic.net", "password": admin_password},
     )
     assert register_resp.status_code == 200, register_resp.text
     await promote_to_admin(admin_handle)

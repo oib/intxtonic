@@ -10,7 +10,7 @@ async def test_register_login_me_and_create_post():
         # Register
         r = await client.post("/auth/register", json={
             "handle": "alice",
-            "email": "alice@example.com",
+            "email": "alice@intxtonic.net",
             "password": "test1234"
         })
         assert r.status_code == 200, r.text

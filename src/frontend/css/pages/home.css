@@ -44,6 +44,96 @@
   text-decoration: underline;
 }
 
+.lang-picker {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  background: var(--bg-2);
+  border: 1px solid var(--bd-2);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
+}
+
+.lang-picker select {
+  background: transparent;
+  border: none;
+  color: var(--tx-0);
+  font-size: 0.95rem;
+  padding: 0.25rem 0.5rem;
+  appearance: none;
+  cursor: pointer;
+}
+
+.lang-picker select:focus {
+  outline: none;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.topics {
+  margin-top: 2.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.topics-head h2 {
+  margin: 0;
+  color: var(--pri);
+}
+
+.topics-grid {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.topic-card {
+  padding: 1.5rem;
+  border-radius: 12px;
+  background: var(--bg-2);
+  border: 1px solid var(--bd-2);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.topic-card h3 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.topic-card p {
+  margin: 0;
+  color: var(--tx-1);
+}
+
+.topic-card .link {
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.topic-card .link:hover {
+  text-decoration: underline;
+}
+
+.topic-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 28px rgba(0, 0, 0, 0.2);
+}
+
 @media (max-width: 768px) {
   .hero-features {
     grid-template-columns: 1fr;
@@ -58,15 +148,23 @@
     flex-direction: column;
     gap: 0.5rem;
   }
-
   .welcome-actions .btn {
     width: 100%;
     justify-content: center;
   }
-}
 
-.welcome-auth {
-  margin: 2rem 0;
+  .lang-picker {
+    padding: 0.25rem 0.5rem;
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .lang-picker select {
+    width: 100%;
+  }
+  .topics-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .welcome-auth h2 {

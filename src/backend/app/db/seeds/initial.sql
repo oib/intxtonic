@@ -46,7 +46,7 @@ ON CONFLICT DO NOTHING;
 
 -- Admin account: user1 (password to be set by app; password_hash can be updated later)
 INSERT INTO app.accounts (id, handle, display_name, email, locale)
-VALUES (gen_random_uuid(), 'user1', 'Administrator', 'user1@example.com', 'en')
+VALUES (gen_random_uuid(), 'user1', 'Administrator', 'user1@intxtonic.net', 'en')
 ON CONFLICT (handle) DO NOTHING;
 
 -- Attach admin role to user1

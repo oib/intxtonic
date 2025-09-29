@@ -46,7 +46,7 @@ async def test_tags_admin_and_replies_flow():
         # Register normal user and promote to admin
         r = await client.post("/auth/register", json={
             "handle": "adminuser",
-            "email": "adminuser@example.com",
+            "email": "adminuser@intxtonic.net",
             "password": "Admin1234"
         })
         assert r.status_code == 200, r.text
@@ -90,7 +90,7 @@ async def test_tags_admin_and_replies_flow():
         # Create a regular user to post and reply
         r = await client.post("/auth/register", json={
             "handle": "bob",
-            "email": "bob@example.com",
+            "email": "bob@intxtonic.net",
             "password": "bob12345"
         })
         assert r.status_code == 200

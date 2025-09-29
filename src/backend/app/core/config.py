@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     app_env: str = ""
     cors_allow_origins: List[str] = ["*"]
     email_from: str = ""
-    email_from_name: str = "LangSum"
+    email_from_name: str = "intxtonic"
     frontend_base_url: str = "http://127.0.0.1:8002"
     smtp_server: str = ""
     smtp_port: int = 25
@@ -36,8 +36,8 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     load_dotenv()
     email_from = os.getenv('EMAIL_FROM', 'test@keisanki.net')
-    email_from_name = os.getenv('EMAIL_FROM_NAME', 'LangSum')
-    frontend_base_url = os.getenv('FRONTEND_BASE_URL', 'http://127.0.0.1:8002')
+    email_from_name = os.getenv('EMAIL_FROM_NAME', 'intxtonic')
+    frontend_base_url = os.getenv('FRONTEND_BASE_URL', 'https://intxtonic.net')
     smtp_server = os.getenv('SMTP_SERVER', 'localhost')
     smtp_port = int(os.getenv('SMTP_PORT', '25'))
     smtp_use_tls = os.getenv('SMTP_USE_TLS', 'false').lower() in ('1','true','yes')
@@ -47,7 +47,7 @@ def get_settings() -> Settings:
     redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
 
     return Settings(
-        app_name="LangSum",
+        app_name="intxtonic",
         secret_key="your-secret-key-here",
         log_level="INFO",
         token_expiry_hours=168,

@@ -13,7 +13,7 @@ async def test_non_admin_cannot_create_tag():
         # Register normal user
         r = await client.post("/auth/register", json={
             "handle": "charlie",
-            "email": "charlie@example.com",
+            "email": "charlie@intxtonic.net",
             "password": "Char12345"
         })
         assert r.status_code == 200, r.text
@@ -45,7 +45,7 @@ async def test_rate_limit_posts_and_replies():
         # Register
         r = await client.post("/auth/register", json={
             "handle": "ratelimit1",
-            "email": "rl1@example.com",
+            "email": "rl1@intxtonic.net",
             "password": "Rl1pass123"
         })
         assert r.status_code == 200, r.text
