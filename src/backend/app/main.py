@@ -101,10 +101,34 @@ _PROJECT_ROOT = _project_root_from_here()
 # Serve uploaded files from absolute path to align with upload saver
 app.mount("/uploads", StaticFiles(directory=str(_PROJECT_ROOT / "uploads")), name="uploads")
 
+_FEATURE_PAGES = {
+    "translation-engine": "src/frontend/pages/features/translation-engine.html",
+    "ui-localization": "src/frontend/pages/features/ui-localization.html",
+    "culture-language": "src/frontend/pages/features/culture-language.html",
+    "developer-workflow": "src/frontend/pages/features/developer-workflow.html",
+    "tech-briefings": "src/frontend/pages/features/tech-briefings.html",
+    "governance-controls": "src/frontend/pages/features/governance-controls.html",
+    "policy-society": "src/frontend/pages/features/policy-society.html",
+    "localization-ops": "src/frontend/pages/features/localization-ops.html",
+}
+
 
 @app.get("/")
 def landing_page():
     return FileResponse("src/frontend/pages/index.html")
+
+
+@app.get("/features/")
+def features_index_page():
+    return FileResponse("src/frontend/pages/features/index.html")
+
+
+@app.get("/features/{slug}.html")
+def features_detail_page(slug: str):
+    page_path = _FEATURE_PAGES.get(slug)
+    if not page_path:
+        raise HTTPException(status_code=404, detail="Feature page not found")
+    return FileResponse(page_path)
 
 # Register API routers BEFORE clean URL frontend routes to ensure specific API
 # endpoints (e.g., /tags/usage) are not shadowed by catch-all page routes like
@@ -150,6 +174,11 @@ def login_page():
 @app.get("/register")
 def register_page():
     return FileResponse("src/frontend/pages/register.html")
+
+
+@app.get("/confirm-email")
+def confirm_email_page():
+    return FileResponse("src/frontend/pages/confirm-email.html")
 
 
 @app.get("/post/{post_id}")

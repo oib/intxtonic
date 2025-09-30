@@ -7,6 +7,8 @@ let _dictFallback = {};
 let _currentLang = 'en';
 const _listeners = new Set();
 
+const STORAGE_KEY = 'ui_lang';
+
 function _notify() {
   for (const fn of _listeners) {
     try { fn(_currentLang); } catch {}
@@ -61,6 +63,26 @@ async function _safeFetchJSON(url) {
   }
 }
 
+async function _resolveInitialLanguage(defaultLang) {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) return stored;
+  } catch {}
+
+  try {
+    const resp = await fetch('/auth/me', { credentials: 'include' });
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data?.locale) {
+        try { localStorage.setItem(STORAGE_KEY, data.locale); } catch {}
+        return data.locale;
+      }
+    }
+  } catch {}
+
+  return defaultLang;
+}
+
 export async function setLanguage(lang) {
   _currentLang = lang;
   const [active, fallback] = await Promise.all([
@@ -83,7 +105,9 @@ export async function initI18n(defaultLang = 'en') {
   });
   mo.observe(document.documentElement, { childList: true, subtree: true });
 
-  await setLanguage(defaultLang);
+  const initial = await _resolveInitialLanguage(defaultLang);
+  await setLanguage(initial);
+  try { document.documentElement.setAttribute('lang', initial); } catch {}
 }
 
 if (typeof window !== 'undefined') {

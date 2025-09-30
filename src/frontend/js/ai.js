@@ -27,16 +27,17 @@ export async function translatePost(postId) {
 }
 
 // Function to request summarization of a post
-export async function summarizePost(postId) {
+export async function summarizePost(postId, opts = {}) {
   if (!getToken()) {
     showToast('Login to summarize posts', 'warn');
     return null;
   }
   try {
+    const payload = { ...opts };
     const response = await fetch(`/api/posts/${postId}/summarize`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({})
+      body: JSON.stringify(payload)
     });
     if (!response.ok) {
       throw new Error(await response.text());
@@ -97,11 +98,13 @@ export function bindPostPageAIActions(postId) {
   const translateBtn = document.getElementById('translate-post');
   const summarizeBtn = document.getElementById('summarize-post');
   const bodyEl = document.getElementById('body');
+  let lastTranslation = null;
 
   if (translateBtn) {
     translateBtn.addEventListener('click', async () => {
       translateBtn.disabled = true;
       const result = await translatePost(postId);
+      lastTranslation = result?.translated_text || null;
       translateBtn.disabled = false;
       if (result && result.translated_text && bodyEl) {
         bodyEl.innerHTML += `<br><strong>Translated:</strong> ${result.translated_text}`;
@@ -112,7 +115,7 @@ export function bindPostPageAIActions(postId) {
   if (summarizeBtn) {
     summarizeBtn.addEventListener('click', async () => {
       summarizeBtn.disabled = true;
-      const result = await summarizePost(postId);
+      const result = await summarizePost(postId, lastTranslation ? { source_text: lastTranslation } : {});
       summarizeBtn.disabled = false;
       if (result && result.summary && bodyEl) {
         bodyEl.innerHTML += `<br><strong>Summary:</strong> ${result.summary}`;

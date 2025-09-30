@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>intxtonic • Developer-first workflow</title>
+  <link rel="stylesheet" href="/src/frontend/css/base.css">
+  <link rel="stylesheet" href="/src/frontend/css/components.css">
+  <link rel="stylesheet" href="/src/frontend/css/layout.css">
+  <link rel="stylesheet" href="/src/frontend/css/pages/feature-detail.css">
+  <script type="module" src="/src/frontend/js/i18n-runtime.js" data-i18n-init></script>
+  <script type="module" src="/src/frontend/js/i18n-ui.js"></script>
+</head>
+<body>
+  <header class="site">
+    <div class="inner container nav-3">
+      <div class="left">
+        <label class="lang-picker" for="feature-lang">
+          <span class="visually-hidden">Select language</span>
+          <select id="feature-lang" aria-label="Select language"></select>
+        </label>
+      </div>
+      <nav class="flex ai-c" style="gap:8px">
+        <a class="btn btn--subtle" href="/" data-i18n="nav.home">Home</a>
+        <a class="btn btn--subtle" href="/login/" data-i18n="nav.login">Login</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <a class="back-link" href="/">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5"/></svg>
+      Back to overview
+    </a>
+
+    <section class="feature-hero">
+      <div class="feature-hero__body">
+        <h1>Developer-first workflow</h1>
+        <p>Integrate localization into CI/CD without custom glue code. intxtonic exposes versioned APIs, webhooks, and CLI tooling so engineering teams can automate translations, QA runs, and releases alongside their existing deployment pipeline.</p>
+        <div class="feature-meta">
+          <span class="badge">CLI tooling</span>
+          <span class="badge">Webhooks</span>
+          <span class="badge">GitOps ready</span>
+        </div>
+      </div>
+      <div class="feature-hero__media">
+        <img src="/src/frontend/assets/topics/Developer-first_workflow.jpg" alt="Developer workflow illustration">
+      </div>
+    </section>
+
+    <section class="feature-grid">
+      <article class="feature-card">
+        <h2>Versioned APIs</h2>
+        <p>Every locale-aware endpoint is versioned and documented. Fetch translation states, job logs, and release manifests with predictable schemas that work across languages.</p>
+        <ul>
+          <li>REST and GraphQL endpoints with typed SDKs for TypeScript and Python.</li>
+          <li>Pagination, filtering, and field projections for efficient integration.</li>
+          <li>Signed responses for tamper detection in downstream services.</li>
+        </ul>
+      </article>
+
+      <article class="feature-card">
+        <h2>Event-driven automation</h2>
+        <p>Webhooks fire on translation completion, QA regressions, or release approvals. Pipe events into your build system to trigger tests, run scripting, or notify maintainers.</p>
+        <ul>
+          <li>Configurable payload templates with secret rotation support.</li>
+          <li>Replay protection and delivery metrics for observability.</li>
+          <li>Native integrations for Slack, Teams, and PagerDuty.</li>
+        </ul>
+      </article>
+
+      <article class="feature-card">
+        <h2>CLI & CI/CD integrations</h2>
+        <p>The `intxt` CLI bundles translations, runs smoke tests, and publishes releases from any pipeline runner. Combine commands with your deployment scripts to keep localization fully automated.</p>
+        <ul>
+          <li>Built-in commands for syncing string registries and preview builds.</li>
+          <li>Exit codes tuned for GitHub Actions, GitLab CI, and CircleCI.</li>
+          <li>Cache-aware operations to shorten build times across locales.</li>
+        </ul>
+      </article>
+    </section>
+  </main>
+
+  <script type="module">
+    import { initLanguageSwitcher } from '/src/frontend/js/i18n-ui.js';
+    initLanguageSwitcher(document.getElementById('feature-lang'));
+  </script>
+</body>
+</html>

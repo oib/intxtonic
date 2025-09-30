@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>intxtonic • Policy & Society</title>
+  <link rel="stylesheet" href="/src/frontend/css/base.css">
+  <link rel="stylesheet" href="/src/frontend/css/components.css">
+  <link rel="stylesheet" href="/src/frontend/css/layout.css">
+  <link rel="stylesheet" href="/src/frontend/css/pages/feature-detail.css">
+  <script type="module" src="/src/frontend/js/i18n-runtime.js" data-i18n-init></script>
+  <script type="module" src="/src/frontend/js/i18n-ui.js"></script>
+</head>
+<body>
+  <header class="site">
+    <div class="inner container nav-3">
+      <div class="left">
+        <label class="lang-picker" for="feature-lang">
+          <span class="visually-hidden">Select language</span>
+          <select id="feature-lang" aria-label="Select language"></select>
+        </label>
+      </div>
+      <nav class="flex ai-c" style="gap:8px">
+        <a class="btn btn--subtle" href="/" data-i18n="nav.home">Home</a>
+        <a class="btn btn--subtle" href="/login/" data-i18n="nav.login">Login</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <a class="back-link" href="/">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5"/></svg>
+      Back to overview
+    </a>
+
+    <section class="feature-hero">
+      <div class="feature-hero__body">
+        <h1>Policy &amp; Society</h1>
+        <p>Keep civic updates, public policy briefs, and social impact reports synchronized across regions. intxtonic automates localization while giving policy teams the context controls and approval gates they need.</p>
+        <div class="feature-meta">
+          <span class="badge">Regulatory ready</span>
+          <span class="badge">Regional insights</span>
+          <span class="badge">Stakeholder portals</span>
+        </div>
+      </div>
+      <div class="feature-hero__media">
+        <img src="/src/frontend/assets/topics/PolicySociety.jpg" alt="Policy workflows illustration">
+      </div>
+    </section>
+
+    <section class="feature-grid">
+      <article class="feature-card">
+        <h2>Regional publishing flows</h2>
+        <p>Route policy updates through per-region workflows with custom approvers, legal checks, and publishing channels. Ensure every locale receives timely announcements that match local terminology.</p>
+        <ul>
+          <li>Configurable review chains per country or jurisdiction.</li>
+          <li>Locale-specific metadata requirements (legal citations, agencies, deadlines).</li>
+          <li>Automatic handoff to downstream public sites or newsletters.</li>
+        </ul>
+      </article>
+
+      <article class="feature-card">
+        <h2>Stakeholder portals</h2>
+        <p>Provide regulators, NGOs, and community partners with tailored dashboards summarizing the policies that affect them. Combine translations with commentary, timelines, and open actions.</p>
+        <ul>
+          <li>Role-based content filters and permission sets.</li>
+          <li>Action item trackers with due dates and follow-up flows.</li>
+          <li>Embedded discussion threads for feedback loops.</li>
+        </ul>
+      </article>
+
+      <article class="feature-card">
+        <h2>Contextual analytics</h2>
+        <p>Monitor the reach and reception of policy content. Track which locales engage, which pages need updates, and how sentiment shifts across languages.</p>
+        <ul>
+          <li>Engagement dashboards segmented by locale and stakeholder type.</li>
+          <li>Auto-detected sentiment summaries with drill-down to source comments.</li>
+          <li>Alerts for outdated or inconsistent policy references.</li>
+        </ul>
+      </article>
+    </section>
+  </main>
+
+  <script type="module">
+    import { initLanguageSwitcher } from '/src/frontend/js/i18n-ui.js';
+    initLanguageSwitcher(document.getElementById('feature-lang'));
+  </script>
+</body>
+</html>

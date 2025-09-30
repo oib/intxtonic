@@ -45,8 +45,15 @@ SELECT r.id, p.id FROM r JOIN p ON p.key IN ('post.create','reply.create','vote.
 ON CONFLICT DO NOTHING;
 
 -- Admin account: user1 (password to be set by app; password_hash can be updated later)
-INSERT INTO app.accounts (id, handle, display_name, email, locale)
-VALUES (gen_random_uuid(), 'user1', 'Administrator', 'user1@intxtonic.net', 'en')
+INSERT INTO app.accounts (id, handle, display_name, email, locale, password_hash)
+VALUES (
+  gen_random_uuid(),
+  'user1',
+  'Administrator',
+  'user1@intxtonic.net',
+  'en',
+  '$2b$12$7u3qZMyYRsK4LK3LEdA.UO7nPm5bL/4IWynfLSoPnAfe.MhMeBseS'
+)
 ON CONFLICT (handle) DO NOTHING;
 
 -- Attach admin role to user1
