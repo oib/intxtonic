@@ -23,9 +23,25 @@ CREATE TABLE IF NOT EXISTS app.accounts (
   email_confirmed_at timestamptz,
   email_confirmation_token text,
   email_confirmation_token_expires timestamptz,
-  email_confirmation_sent_at timestamptz
+  email_confirmation_sent_at timestamptz,
+  password_reset_token text,
+  password_reset_token_expires timestamptz,
+  password_reset_sent_at timestamptz,
+  magic_login_token text,
+  magic_login_token_expires timestamptz,
+  magic_login_sent_at timestamptz,
+  disabled_at timestamptz
 );
 CREATE INDEX IF NOT EXISTS accounts_handle_idx ON app.accounts (lower(handle));
+
+ALTER TABLE app.accounts
+  ADD COLUMN IF NOT EXISTS password_reset_token text,
+  ADD COLUMN IF NOT EXISTS password_reset_token_expires timestamptz,
+  ADD COLUMN IF NOT EXISTS password_reset_sent_at timestamptz,
+  ADD COLUMN IF NOT EXISTS magic_login_token text,
+  ADD COLUMN IF NOT EXISTS magic_login_token_expires timestamptz,
+  ADD COLUMN IF NOT EXISTS magic_login_sent_at timestamptz,
+  ADD COLUMN IF NOT EXISTS disabled_at timestamptz;
 
 -- Roles & permissions
 CREATE TABLE IF NOT EXISTS app.roles (
@@ -200,7 +216,8 @@ CREATE TABLE IF NOT EXISTS app.sanctions (
   ends_at     timestamptz,
   created_at  timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS idx_sanctions_active ON app.sanctions (account_id) WHERE ends_at IS NULL OR ends_at > NOW();
+CREATE INDEX IF NOT EXISTS idx_sanctions_open ON app.sanctions (account_id) WHERE ends_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_sanctions_end_at ON app.sanctions (account_id, ends_at) WHERE ends_at IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS app.moderation_actions (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),

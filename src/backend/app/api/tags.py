@@ -14,6 +14,7 @@ from ..core.deps import (
     is_admin_account,
 )
 from ..core.tag_access import (
+    LANGUAGE_TAG_SLUGS,
     build_access_clause,
     fetch_accessible_tag_sets,
     tag_visibility_available,
@@ -251,16 +252,18 @@ async def create_tag(
     slug = make_slug(label)
     if not slug:
         raise HTTPException(status_code=400, detail="invalid label")
+    is_restricted = slug not in LANGUAGE_TAG_SLUGS
+
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
                 """
                 INSERT INTO app.tags (id, slug, label, is_restricted)
-                VALUES (gen_random_uuid(), %s, %s, true)
+                VALUES (gen_random_uuid(), %s, %s, %s)
                 ON CONFLICT (slug) DO NOTHING
                 RETURNING id, slug, label, is_banned, is_restricted, created_at
                 """,
-                (slug, label),
+                (slug, label, is_restricted),
             )
             row = await cur.fetchone()
             if not row:
@@ -278,6 +281,41 @@ async def create_tag(
                 "is_restricted": row[4],
                 "created_at": row[5].isoformat() if row[5] else None,
             }
+
+
+@router.post("/{tag_id}/unrestrict", response_model=TagOut)
+async def unrestrict_tag(
+    tag_id: str,
+    request: Request,
+    _: None = Depends(require_admin),
+    pool = Depends(get_pool),
+    csrf: bool = Depends(csrf_validate),
+):
+    async with pool.connection() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                """
+                UPDATE app.tags
+                SET is_restricted = false
+                WHERE id = %s
+                RETURNING id, slug, label, is_banned, is_restricted, created_at
+                """,
+                (tag_id,),
+            )
+            row = await cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="tag not found")
+    await invalidate_tag_cache(request)
+    return {
+        "id": str(row[0]),
+        "slug": row[1],
+        "label": row[2],
+        "is_banned": row[3],
+        "is_restricted": row[4],
+        "created_at": row[5].isoformat() if row[5] else None,
+    }
+
+
 @router.post("/{tag_id}/ban", response_model=OkOut)
 async def ban_tag(
     tag_id: str,

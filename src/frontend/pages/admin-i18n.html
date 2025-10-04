@@ -3,13 +3,19 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LangSum • Admin • i18n</title>
+  <title>inTXTonic • Admin • i18n</title>
   <link rel="preload" href="/src/frontend/css/base.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
   <noscript><link rel="stylesheet" href="/src/frontend/css/base.css"></noscript>
   <link rel="preload" href="/src/frontend/css/components.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
   <noscript><link rel="stylesheet" href="/src/frontend/css/components.css"></noscript>
   <link rel="preload" href="/src/frontend/css/layout.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
   <noscript><link rel="stylesheet" href="/src/frontend/css/layout.css"></noscript>
+  <style>
+    .card > h1 {
+      font-size: 1.75rem;
+      margin: 0 0 0.75rem;
+    }
+  </style>
   <script type="module" src="/src/frontend/js/i18n-runtime.js" data-i18n-init></script>
   <script type="module" src="/src/frontend/js/i18n-ui.js"></script>
 </head>
@@ -73,7 +79,7 @@
 
   <footer class="site">
     <div class="inner container flex ai-c jc-b">
-      <div> <span id="year"></span> LangSum</div>
+      <div> <span id="year"></span> inTXTonic</div>
       <div class="hide-sm">Built with Windsurf guidelines</div>
     </div>
   </footer>
@@ -95,7 +101,7 @@
     function refreshAuthUI(){ const has = !!getToken(); loginLink.style.display = has?'none':'inline-flex'; logoutBtn.style.display = has?'inline-flex':'none'; }
     logoutBtn.addEventListener('click', async () => {
       try { await fetch('/auth/logout', { method: 'POST', headers: { ...authHeaders() } }); } catch {}
-      clearToken(); showToast(t('toast.signed_out'),'ok'); window.location.href = '/home';
+      clearToken(); showToast(t('toast.signed_out'),'ok'); window.location.href = '/';
     });
     refreshAuthUI();
 
@@ -330,11 +336,31 @@
       isCancelled = true;
     });
 
+    function setupSSE(){
+      try{
+        const es = new EventSource('/notify/events');
+        es.onmessage = (evt) => {
+          if(!evt?.data) return;
+          try{
+            const payload = JSON.parse(evt.data || '{}');
+            if(debugEnabled && payload && payload.type === 'i18n_debug'){
+              addDebug({ key: payload.key || '(unknown)', src: payload.src, dst: payload.dst, prompt: payload.prompt });
+            }
+          }catch{}
+        };
+        es.onerror = () => {
+          try{ es.close(); }catch{}
+          setTimeout(setupSSE, 2500);
+        };
+      }catch{}
+    }
+
     elLocale.addEventListener('change', loadKeys);
     // debounce filter input
     let tmrFilter;
     elQ.addEventListener('input', () => { clearTimeout(tmrFilter); tmrFilter = setTimeout(renderKeys, 180); });
 
+    setupSSE();
     await loadLocales();
     await loadKeys();
   </script>

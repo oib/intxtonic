@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LangSum • User</title>
+  <title>inTXTonic • User</title>
   <link rel="stylesheet" href="/src/frontend/css/base.css">
   <link rel="stylesheet" href="/src/frontend/css/components.css">
   <link rel="stylesheet" href="/src/frontend/css/layout.css">
@@ -15,11 +15,10 @@
   <header class="site">
     <div class="inner container nav-3">
       <div class="left flex ai-c" style="gap:8px">
-        <a id="newpost-link" class="btn" href="/create" style="display:none">New Post</a>
+        <a class="btn btn--subtle" href="/home" data-i18n="nav.home">Home</a>
+        <a id="newpost-link" class="btn" href="/create" style="display:none" data-i18n="nav.new_post">New Post</a>
       </div>
       <nav class="flex ai-c" style="gap:8px">
-        <a class="btn btn--subtle" href="/home" data-i18n="nav.home">Home</a>
-        <a id="profile-link" class="btn btn--subtle" href="#" style="display:none">Profile</a>
         <a id="settings-link" class="btn btn--subtle" href="/user/settings" style="display:none">Settings</a>
         <a id="login-link" class="btn btn--subtle" href="/login" data-i18n="nav.login">Login</a>
         <button id="logout-btn" class="btn btn--ghost" style="display:none" data-i18n="nav.logout">Logout</button>
@@ -37,7 +36,6 @@
               <h1 id="display" style="margin:0;">User</h1>
               <div id="meta" style="color:var(--tx-1)"></div>
             </div>
-            <a id="profile-settings-btn" class="btn btn--subtle" href="/user/settings" style="display:none; margin-left:auto;">Settings</a>
           </div>
           <div class="tabs">
             <button id="tab-posts" class="tab active" data-tab="posts" data-i18n="user.posts">Posts</button>
@@ -77,7 +75,7 @@
 
   <footer class="site">
     <div class="inner container flex ai-c jc-b">
-      <div> <span id="year"></span> LangSum</div>
+      <div> <span id="year"></span> inTXTonic</div>
       <div class="hide-sm">Built with Windsurf guidelines</div>
     </div>
   </footer>
@@ -88,45 +86,48 @@
     import { t } from '/src/frontend/js/i18n-runtime.js';
     import { initBookmarkToggles } from '/src/frontend/js/bookmarks.js';
 
-    document.getElementById('year').textContent = new Date().getFullYear().toString();
-
-    // Guest guard
-    if (!getToken()) { window.location.href = '/login'; }
-
-    refreshAuthUI();  // Call refreshAuthUI on page load to handle auth state
-    document.getElementById('logout-btn')?.addEventListener('click', async () => {
-      try { await fetch('/auth/logout', { method: 'POST', headers: { ...authHeaders() } }); } catch {}
-      clearToken();
-      showToast(t('toast.signed_out'),'ok');
-      window.location.href = '/home';
-    });
-
-    const usp = new URLSearchParams(location.search);
-    let handle = usp.get('handle');
-    let hasValidHandle = true;
-    if (!handle) {
-      // Support clean URL: /user/{handle}
-      const parts = location.pathname.split('/').filter(Boolean);
-      // Expected: ['user', '{handle}']
-      if (parts[0] === 'user' && parts[1]) {
-        handle = decodeURIComponent(parts[1]);
+    window.addEventListener('load', async () => {
+      const yearEl = document.getElementById('year');
+      if (yearEl) {
+        yearEl.textContent = new Date().getFullYear().toString();
       }
-    }
-    const elDisplay = document.getElementById('display');
-    const elMeta = document.getElementById('meta');
-    const elPosts = document.getElementById('posts');
-    const elReplies = document.getElementById('replies');
-    const elPostBookmarks = document.getElementById('post-bookmarks');
-    const elTagBookmarks = document.getElementById('tag-bookmarks');
-    const elSort = document.getElementById('sort');
-    const elAvatar = document.getElementById('avatar-placeholder');
-    const elContentTitle = document.getElementById('content-title');
-    const elTabPosts = document.getElementById('tab-posts');
-    const elTabReplies = document.getElementById('tab-replies');
-    const elTabPostBookmarks = document.getElementById('tab-post-bookmarks');
-    const elTabTagBookmarks = document.getElementById('tab-tag-bookmarks');
-    const loadingIndicator = document.getElementById('profile-loading');
-    const sentinel = document.getElementById('profile-infinite-sentinel');
+
+      // Guest guard
+      if (!getToken()) { window.location.href = '/login'; return; }
+
+      document.getElementById('logout-btn').addEventListener('click', async () => {
+        try { await fetch('/auth/logout', { method: 'POST', headers: { ...authHeaders() } }); } catch {}
+        clearToken();
+        showToast(t('toast.signed_out'),'ok');
+        window.location.href = '/';
+      });
+
+      const usp = new URLSearchParams(location.search);
+      let handle = usp.get('handle');
+      let hasValidHandle = true;
+      if (!handle) {
+        const parts = location.pathname.split('/').filter(Boolean);
+        if (parts[0] === 'user' && parts[1]) {
+          handle = decodeURIComponent(parts[1]);
+        }
+      }
+      document.body.dataset.profileHandle = handle || '';
+      refreshAuthUI();
+      const elDisplay = document.getElementById('display');
+      const elMeta = document.getElementById('meta');
+      const elPosts = document.getElementById('posts');
+      const elReplies = document.getElementById('replies');
+      const elPostBookmarks = document.getElementById('post-bookmarks');
+      const elTagBookmarks = document.getElementById('tag-bookmarks');
+      const elSort = document.getElementById('sort');
+      const elAvatar = document.getElementById('avatar-placeholder');
+      const elContentTitle = document.getElementById('content-title');
+      const elTabPosts = document.getElementById('tab-posts');
+      const elTabReplies = document.getElementById('tab-replies');
+      const elTabPostBookmarks = document.getElementById('tab-post-bookmarks');
+      const elTabTagBookmarks = document.getElementById('tab-tag-bookmarks');
+      const loadingIndicator = document.getElementById('profile-loading');
+      const sentinel = document.getElementById('profile-infinite-sentinel');
 
     const LIMIT = 10;
     let currentTab = 'posts';
@@ -139,7 +140,7 @@
       tagBookmarks: { offset: 0, total: 0, hasMore: true, isLoading: false, loaded: false }
     };
 
-    const io = sentinel ? new IntersectionObserver((entries) => {
+      const io = sentinel ? new IntersectionObserver((entries) => {
       if (!entries[0].isIntersecting) return;
       if (currentTab === 'posts') {
         if (state.posts.hasMore) loadPosts(true);
@@ -152,7 +153,7 @@
       }
     }, { root: null, rootMargin: '0px 0px 200px 0px', threshold: 0.1 }) : null;
 
-    function resetTab(tab){
+      function resetTab(tab){
       const st = state[tab];
       if(!st) return;
       st.offset = 0;
@@ -162,7 +163,7 @@
       st.loaded = false;
     }
 
-    function updateObserver(){
+      function updateObserver(){
       if (!io || !sentinel) return;
       io.disconnect();
       const st = state[currentTab];
@@ -171,27 +172,27 @@
       }
     }
 
-    document.body.dataset.profileHandle = handle || '';
+      document.body.dataset.profileHandle = handle || '';
 
-    if(!handle){
-      elDisplay.textContent = 'User not specified';
-      hasValidHandle = false;
-    }
-
-    try{
-      const meData = await fetchMe();
-      viewerHandle = meData?.handle || null;
-      document.body.dataset.viewerHandle = viewerHandle || '';
-      if(viewerHandle && handle){
-        isOwnProfile = viewerHandle === handle;
-        if(isOwnProfile){
-          elTabPostBookmarks?.style.setProperty('display','inline-flex');
-          elTabTagBookmarks?.style.setProperty('display','inline-flex');
-        }
+      if(!handle){
+        elDisplay.textContent = 'User not specified';
+        hasValidHandle = false;
       }
-    }catch{}
 
-    async function loadUser(){
+      try{
+        const meData = await fetchMe();
+        viewerHandle = meData?.handle || null;
+        document.body.dataset.viewerHandle = viewerHandle || '';
+        if(viewerHandle && handle){
+          isOwnProfile = viewerHandle === handle;
+          if(isOwnProfile){
+            elTabPostBookmarks?.style.setProperty('display','inline-flex');
+            elTabTagBookmarks?.style.setProperty('display','inline-flex');
+          }
+        }
+      }catch{}
+
+      async function loadUser(){
       if(!hasValidHandle) return;
       try{
         const res = await fetch(`/users/${encodeURIComponent(handle)}`, { headers:{ ...authHeaders() }});
@@ -212,7 +213,7 @@
       }
     }
 
-    async function loadPosts(append=false){
+      async function loadPosts(append=false){
       if(!hasValidHandle) return;
       const st = state.posts;
       if (st.isLoading || (!append && st.loaded && currentTab !== 'posts')) return;
@@ -268,7 +269,7 @@
       }
     }
 
-    async function loadReplies(append=false){
+      async function loadReplies(append=false){
       if(!hasValidHandle) return;
       const st = state.replies;
       if (st.isLoading || (!append && st.loaded && currentTab !== 'replies')) return;
@@ -323,7 +324,7 @@
       }
     }
 
-    function switchTab(tab) {
+      function switchTab(tab) {
       currentTab = tab;
       elTabPosts.classList.toggle('active', tab === 'posts');
       elTabReplies.classList.toggle('active', tab === 'replies');
@@ -352,7 +353,7 @@
       }
     }
 
-    elSort.addEventListener('change', () => {
+      elSort.addEventListener('change', () => {
       resetTab('posts');
       resetTab('replies');
       resetTab('postBookmarks');
@@ -363,18 +364,18 @@
         loadReplies(false);
       }
     });
-    elTabPosts.addEventListener('click', () => switchTab('posts'));
-    elTabReplies.addEventListener('click', () => switchTab('replies'));
-    elTabPostBookmarks?.addEventListener('click', () => {
+      elTabPosts.addEventListener('click', () => switchTab('posts'));
+      elTabReplies.addEventListener('click', () => switchTab('replies'));
+      elTabPostBookmarks?.addEventListener('click', () => {
       if(!isOwnProfile){ showToast('Bookmarks are only visible to the owner','info'); return; }
       switchTab('postBookmarks');
     });
-    elTabTagBookmarks?.addEventListener('click', () => {
+      elTabTagBookmarks?.addEventListener('click', () => {
       if(!isOwnProfile){ showToast('Bookmarks are only visible to the owner','info'); return; }
       switchTab('tagBookmarks');
     });
 
-    elPosts.addEventListener('click', (evt) => {
+      elPosts.addEventListener('click', (evt) => {
       const chip = evt.target.closest?.('.chip-tag');
       if(!chip) return;
       const slug = chip.getAttribute('data-slug');
@@ -384,8 +385,8 @@
       window.location.href = `${url.pathname}?${url.searchParams.toString()}`;
     });
 
-    if(isOwnProfile){
-      elPosts.addEventListener('click', async (evt) => {
+      if(isOwnProfile){
+        elPosts.addEventListener('click', async (evt) => {
         const btn = evt.target.closest?.('.delete-post');
         if(!btn) return;
         const postId = btn.getAttribute('data-id');
@@ -405,7 +406,7 @@
         }
       });
 
-      elReplies.addEventListener('click', async (evt) => {
+        elReplies.addEventListener('click', async (evt) => {
         const btn = evt.target.closest?.('.delete-reply');
         if(!btn) return;
         const replyId = btn.getAttribute('data-id');
@@ -426,7 +427,7 @@
       });
     }
 
-    async function loadPostBookmarks(append=false){
+      async function loadPostBookmarks(append=false){
       if(!hasValidHandle || !isOwnProfile) return;
       const st = state.postBookmarks;
       if (st.isLoading || (!append && st.loaded && currentTab !== 'postBookmarks')) return;
@@ -489,7 +490,7 @@
       }
     }
 
-    async function loadTagBookmarks(append=false){
+      async function loadTagBookmarks(append=false){
       if(!hasValidHandle || !isOwnProfile) return;
       const st = state.tagBookmarks;
       if (st.isLoading || (!append && st.loaded && currentTab !== 'tagBookmarks')) return;
@@ -549,10 +550,11 @@
       }
     }
 
-    if (hasValidHandle) {
-      await loadUser();
-      await loadPosts(false);
-    }
+      if (hasValidHandle) {
+        await loadUser();
+        await loadPosts(false);
+      }
+    });
   </script>
 </body>
 </html>

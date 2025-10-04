@@ -23,7 +23,13 @@ async def _event_stream() -> AsyncGenerator[bytes, None]:
         # Send initial comment to keep connection open
         yield b":ok\n\n"
         while True:
-            event = await q.get()
+            try:
+                event = await asyncio.wait_for(q.get(), timeout=30.0)
+            except asyncio.TimeoutError:
+                # periodic keep-alive to prevent proxy/browser timeouts
+                yield b":keepalive\n\n"
+                continue
+
             payload = json.dumps(event, ensure_ascii=False)
             data = f"data: {payload}\n\n".encode("utf-8")
             yield data

@@ -2,11 +2,25 @@ from __future__ import annotations
 
 from typing import Optional, Tuple, Set, List
 
+LANGUAGE_TAG_SLUGS: Tuple[str, ...] = (
+    "en",
+    "de",
+    "fr",
+    "es",
+    "it",
+    "pt",
+    "zh",
+    "ja",
+    "ko",
+    "ru",
+)
+
 _VISIBILITY_AVAILABLE: Optional[bool] = None
 
 ACCESS_CLAUSE_TEMPLATE = """
 (
     {alias}.is_restricted = false
+    OR {alias}.slug = ANY(%s)
     OR EXISTS (
         SELECT 1
         FROM app.tag_visibility tv
@@ -29,8 +43,14 @@ ACCESS_CLAUSE_TEMPLATE = """
 
 def build_access_clause(alias: str, account_id: Optional[str]) -> Tuple[str, List[object]]:
     if not account_id:
-        return (f"{alias}.is_restricted = false", [])
-    return (ACCESS_CLAUSE_TEMPLATE.format(alias=alias), [account_id, account_id])
+        return (
+            f"({alias}.is_restricted = false OR {alias}.slug = ANY(%s))",
+            [list(LANGUAGE_TAG_SLUGS)],
+        )
+    return (
+        ACCESS_CLAUSE_TEMPLATE.format(alias=alias),
+        [list(LANGUAGE_TAG_SLUGS), account_id, account_id],
+    )
 
 
 def _rows_to_sets(rows) -> Tuple[Set[str], Set[str]]:
@@ -84,11 +104,11 @@ async def fetch_accessible_tag_sets(
         query = "SELECT id, slug FROM app.tags"
         params: tuple[object, ...] = ()
     elif not account_id:
-        query = "SELECT id, slug FROM app.tags WHERE is_restricted = false"
-        params = ()
+        query = "SELECT id, slug FROM app.tags WHERE is_restricted = false OR slug = ANY(%s)"
+        params = (list(LANGUAGE_TAG_SLUGS),)
     else:
         query = """
-            SELECT id, slug FROM app.tags WHERE is_restricted = false
+            SELECT id, slug FROM app.tags WHERE is_restricted = false OR slug = ANY(%s)
             UNION
             SELECT t.id, t.slug
             FROM app.tag_visibility tv
@@ -101,7 +121,7 @@ async def fetch_accessible_tag_sets(
             JOIN app.tags t ON t.id = tv.tag_id
             WHERE ar.account_id = %s
         """
-        params = (account_id, account_id)
+        params = (list(LANGUAGE_TAG_SLUGS), account_id, account_id)
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute(query, params)

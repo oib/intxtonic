@@ -181,6 +181,11 @@ def confirm_email_page():
     return FileResponse("src/frontend/pages/confirm-email.html")
 
 
+@app.get("/magic-login")
+def magic_login_page():
+    return FileResponse("src/frontend/pages/magic-login.html")
+
+
 @app.get("/post/{post_id}")
 def post_page(post_id: str):
     return FileResponse("src/frontend/pages/post.html")

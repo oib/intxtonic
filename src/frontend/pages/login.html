@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LangSum • Login</title>
+  <title>inTXTonic • Login</title>
   <link rel="stylesheet" href="/src/frontend/css/base.css">
   <link rel="stylesheet" href="/src/frontend/css/components.css">
   <link rel="stylesheet" href="/src/frontend/css/layout.css">
@@ -25,21 +25,30 @@
         <button class="btn" type="submit">Login</button>
         <div id="msg" class="badge" style="display:none"></div>
       </form>
+      <div id="magic-link-section" class="hint" style="display:none; margin-top:12px">
+        <p style="margin:0 0 8px">Having trouble logging in?</p>
+        <button id="btn-magic-link" class="btn btn--subtle">Email me a one-time login link</button>
+        <div id="magic-link-msg" class="badge" style="display:none; margin-top:8px"></div>
+      </div>
       <p class="hint" style="margin-top:12px; color:var(--tx-1)">Need an account? <a href="/register" class="link">Sign up</a>.</p>
       <!-- No navigation for guests on the login page -->
     </section>
   </main>
 
   <script type="module">
-    import { login } from '/src/frontend/js/auth.js';
+    import { login, requestMagicLink } from '/src/frontend/js/auth.js';
     import { showToast } from '/src/frontend/js/toast.js';
 
     const form = document.getElementById('login-form');
     const msg = document.getElementById('msg');
+    const magicSection = document.getElementById('magic-link-section');
+    const magicBtn = document.getElementById('btn-magic-link');
+    const magicMsg = document.getElementById('magic-link-msg');
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       msg.style.display = 'none';
+      magicMsg.style.display = 'none';
       const user = document.getElementById('inp-user').value.trim();
       const pass = document.getElementById('inp-pass').value;
       try {
@@ -50,7 +59,35 @@
         msg.textContent = 'Login failed';
         msg.style.display = 'inline-block';
         showToast('Invalid credentials', 'err');
+        magicSection.style.display = 'block';
+        magicBtn.disabled = false;
       }
+    });
+
+    magicBtn.addEventListener('click', async () => {
+      const user = document.getElementById('inp-user').value.trim();
+      magicMsg.style.display = 'none';
+      if(!user){
+        magicMsg.textContent = 'Enter your handle or email first.';
+        magicMsg.className = 'badge badge--warn';
+        magicMsg.style.display = 'inline-block';
+        return;
+      }
+      magicBtn.disabled = true;
+      try{
+        await requestMagicLink(user);
+        magicMsg.textContent = 'If that account exists, a link is on its way.';
+        magicMsg.className = 'badge';
+        magicMsg.style.display = 'inline-block';
+        showToast('Magic link sent', 'ok');
+      }catch(err){
+        magicMsg.textContent = 'Unable to send link right now.';
+        magicMsg.className = 'badge badge--err';
+        magicMsg.style.display = 'inline-block';
+        showToast('Magic link failed', 'err');
+        magicBtn.disabled = false;
+      }
+      setTimeout(() => { magicBtn.disabled = false; }, 5000);
     });
   </script>
 </body>

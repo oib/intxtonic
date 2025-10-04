@@ -19,6 +19,8 @@
 - `GET /tags`: Lists tags respecting visibility rules. Uses `build_access_clause()` to filter restricted tags.
 - `GET /tags/list-top`: Returns top tags with usage counts and applies the same visibility filtering for non-admins.
 - `POST /tags`: Admin-only. Creates a new tag with `is_restricted = true` by default so admins must explicitly grant visibility.
+- `POST /tags` auto-detects language slugs (`en`, `de`, `fr`, `es`, `it`, `pt`, `zh`, `ja`, `ko`, `ru`) and makes them unrestricted immediately.
+- `POST /tags/{id}/unrestrict`: Admin-only. Sets `is_restricted = false` so the tag becomes visible to all audiences (subject to bans).
 - `POST /tags/{id}/ban` & `POST /tags/{id}/unban`: Admin-only toggles for ban state.
 - `GET /tags/visibility`: Admin-only snapshot of which roles/users can see each restricted tag.
 - `GET /tags/visibility/users/{handle}`: Admin-only lookup of tags assigned to a specific user.
@@ -35,6 +37,8 @@
 
 ## Usage Guidelines
 - **Creating tags**: After `POST /tags`, grant visibility to roles/users before the tag is usable by non-admins.
+- **Opening tags**: Use `POST /tags/{id}/unrestrict` once a tag should be globally visible without per-user assignments.
+- **Language tags**: Slugs like `en`, `de`, `fr`, `es`, `it`, `pt`, `zh`, `ja`, `ko`, `ru` are always public; no unrestriction or assignments needed.
 - **Assigning roles**: Prefer role assignments when multiple users need the same restricted tag access.
 - **Auditing access**: Use `GET /tags/visibility` (global) and `GET /tags/visibility/users/{handle}` (per-user) to verify assignments.
 - **Managing bans**: Banned tags remain in the database for history but should not appear publicly until unbanned.

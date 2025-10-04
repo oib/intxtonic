@@ -5,6 +5,13 @@
 let _dictActive = {};
 let _dictFallback = {};
 let _currentLang = 'en';
+try {
+  const storedInitial = localStorage.getItem('ui_lang');
+  if (storedInitial) {
+    _currentLang = storedInitial.trim() || _currentLang;
+    document.documentElement.setAttribute('lang', _currentLang);
+  }
+} catch {}
 const _listeners = new Set();
 
 const STORAGE_KEY = 'ui_lang';
@@ -84,14 +91,17 @@ async function _resolveInitialLanguage(defaultLang) {
 }
 
 export async function setLanguage(lang) {
-  _currentLang = lang;
+  const resolved = (lang && typeof lang === 'string' ? lang.trim() : '') || 'en';
+  _currentLang = resolved;
+  try { localStorage.setItem(STORAGE_KEY, resolved); } catch {}
   const [active, fallback] = await Promise.all([
-    _safeFetchJSON(`/i18n/${lang}.json`),
+    _safeFetchJSON(`/i18n/${resolved}.json`),
     _safeFetchJSON(`/i18n/en.json`)
   ]);
   _dictActive = active || {};
   _dictFallback = fallback || {};
   applyI18n(document);
+  try { document.documentElement.setAttribute('lang', resolved); } catch {}
   _notify();
 }
 
@@ -111,8 +121,18 @@ export async function initI18n(defaultLang = 'en') {
 }
 
 if (typeof window !== 'undefined') {
-  const auto = document.currentScript?.dataset?.i18nInit;
-  if (auto !== undefined) {
-    initI18n(document.documentElement.lang || 'en');
+  if (!window.__i18nRuntimeInitialized) {
+    window.__i18nRuntimeInitialized = true;
+    const kickoff = () => {
+      window.requestAnimationFrame(() => {
+        const langAttr = document.documentElement.getAttribute('lang');
+        initI18n(langAttr || _currentLang || 'en');
+      });
+    };
+    if (document.readyState === 'complete') {
+      kickoff();
+    } else {
+      window.addEventListener('load', kickoff, { once: true });
+    }
   }
 }

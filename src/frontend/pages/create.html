@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LangSum • New Post</title>
+  <title>inTXTonic • New Post</title>
   <link rel="stylesheet" href="/src/frontend/css/base.css">
   <link rel="stylesheet" href="/src/frontend/css/components.css">
   <link rel="stylesheet" href="/src/frontend/css/layout.css">
@@ -12,7 +12,8 @@
   <header class="site">
     <div class="inner container flex ai-c jc-b">
       <div class="flex ai-c" style="gap:8px">
-        <a id="admin-link" class="btn btn--subtle" href="/admin" style="display:none">Admin</a>
+        <a class="btn btn--subtle" href="/home" data-i18n="nav.home">Home</a>
+        <a id="admin-link" class="btn btn--subtle" href="/admin" style="display:none" data-i18n="nav.admin">Admin</a>
       </div>
       <nav class="flex ai-c" style="gap:8px">
         <a id="dashboard-link" class="btn btn--subtle" href="/dashboard/">Dashboard</a>
@@ -76,7 +77,7 @@
 
   <footer class="site">
     <div class="inner container flex ai-c jc-b">
-      <div> <span id="year"></span> LangSum</div>
+      <div> <span id="year"></span> inTXTonic</div>
       <div class="hide-sm">Built with Windsurf guidelines</div>
     </div>
   </footer>
@@ -135,18 +136,31 @@
       try { await fetch('/auth/logout', { method: 'POST', headers: { ...authHeaders() } }); } catch {}
       clearToken();
       showToast('Signed out','ok');
-      window.location.href = '/home';
+      window.location.href = '/';
     });
 
+    function makeSlug(label){
+      return (label || '')
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9-_.]+/g, '-')
+        .replace(/-{2,}/g, '-')
+        .replace(/^[-.]+|[-.]+$/g, '');
+    }
+
     // Tag selection state
-    const selectedTags = new Set();
+    const selectedTags = new Map();
     function renderSelectedTags(){
       const el = document.getElementById('selected-tags-create');
       const btnClear = document.getElementById('btn-clear-tags-create');
-      const arr = Array.from(selectedTags);
+      const arr = Array.from(selectedTags.values());
       if (btnClear) btnClear.style.display = arr.length ? 'inline-flex' : 'none';
-      el.innerHTML = arr.length ? arr.map(s => `<span class="badge">#${s} <button class="btn btn--ghost rm-tag" data-slug="${s}">×</button></span>`).join(' ') : '<span class="badge">No tags selected</span>';
-      el.querySelectorAll('button.rm-tag').forEach(b => b.addEventListener('click', () => { selectedTags.delete(b.getAttribute('data-slug')); renderSelectedTags(); }));
+      el.innerHTML = arr.length ? arr.map(({ slug }) => `<span class="badge" data-tag-slug="${slug}">#${slug} <button class="btn btn--ghost rm-tag" data-slug="${slug}">×</button></span>`).join(' ') : '<span class="badge">No tags selected</span>';
+      el.querySelectorAll('button.rm-tag').forEach(b => b.addEventListener('click', () => {
+        const slug = b.getAttribute('data-slug');
+        if (slug) selectedTags.delete(slug);
+        renderSelectedTags();
+      }));
     }
     renderSelectedTags();
 
@@ -184,7 +198,11 @@
     function selectSuggestion(idx){
       if(idx<0 || idx>=sugItems.length) return;
       const slug = sugItems[idx].slug;
-      if(slug){ selectedTags.add(slug); renderSelectedTags(); }
+      if(slug){
+        const label = sugItems[idx].label || slug;
+        selectedTags.set(slug, { slug, label });
+        renderSelectedTags();
+      }
       if(elQTags) elQTags.value = '';
       elSug.style.display='none';
     }
@@ -203,22 +221,33 @@
       if(!q){ elSug.style.display='none'; return; }
       tmrSug = setTimeout(() => searchTags(q), 200);
     });
+    elQTags?.addEventListener('blur', () => setTimeout(() => { elSug.style.display='none'; }, 150));
+    document.getElementById('btn-clear-tags-create')?.addEventListener('click', () => { selectedTags.clear(); renderSelectedTags(); });
     elQTags?.addEventListener('keydown', (e) => {
-      if(e.key==='Enter'){
-        if (elSug.style.display==='block' && sugItems.length){
+      if(e.key === 'Enter'){
+        if (elSug.style.display === 'block' && sugItems.length){
           selectSuggestion(sugIndex>=0 ? sugIndex : 0);
           e.preventDefault();
-        } else {
-          const q=(elQTags?.value||'').trim(); if(q) searchTags(q);
+          return;
         }
-      } else if (e.key==='ArrowDown'){
+        const raw = (elQTags?.value || '').trim();
+        if(!raw) return;
+        const slug = makeSlug(raw);
+        if(!slug){ showToast('Invalid tag', 'warn'); return; }
+        selectedTags.set(slug, { slug, label: raw });
+        renderSelectedTags();
+        elQTags.value = '';
+        elSug.style.display = 'none';
+        e.preventDefault();
+      }
+      if(e.key==='ArrowDown'){
         if (elSug.style.display==='block' && sugItems.length){ highlightSuggestion(Math.min((sugIndex<0?0:sugIndex+1), sugItems.length-1)); e.preventDefault(); }
       } else if (e.key==='ArrowUp'){
         if (elSug.style.display==='block' && sugItems.length){ highlightSuggestion(Math.max((sugIndex<=0?0:sugIndex-1), 0)); e.preventDefault(); }
       }
     });
-    elQTags?.addEventListener('blur', () => setTimeout(() => { elSug.style.display='none'; }, 150));
-    document.getElementById('btn-clear-tags-create')?.addEventListener('click', () => { selectedTags.clear(); renderSelectedTags(); });
+    // ensure default enter handler above doesn't double bind
+    // (the search on enter when suggestions hidden handled there)
 
     // Admin: create tag
     document.getElementById('btn-create-tag')?.addEventListener('click', async () => {
@@ -232,7 +261,7 @@
           return;
         }
         const tag = await res.json();
-        selectedTags.add(tag.slug);
+        selectedTags.set(tag.slug, { slug: tag.slug, label: tag.label || tag.slug });
         renderSelectedTags();
         (document.getElementById('new-tag-label')||{}).value = '';
         showToast('Tag created','ok');
@@ -306,10 +335,10 @@
         showToast('Post published','ok');
         if (data?.id) {
           // Attach selected tags (if any)
-          const arr = Array.from(selectedTags || []);
-          for (const slug of arr) {
+          const arr = Array.from(selectedTags.values() || []);
+          for (const tag of arr) {
             try {
-              await fetch(`/posts/${data.id}/tags`, { method:'POST', headers:{ 'Content-Type':'application/json', ...authHeaders() }, body: JSON.stringify({ slug }) });
+              await fetch(`/posts/${data.id}/tags`, { method:'POST', headers:{ 'Content-Type':'application/json', ...authHeaders() }, body: JSON.stringify({ slug: tag.slug, label: tag.label }) });
             } catch {}
           }
           window.location.href = `/post/${data.id}`; return;

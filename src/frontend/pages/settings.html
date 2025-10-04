@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LangSum • Settings</title>
+  <title>inTXTonic • Settings</title>
   <link rel="stylesheet" href="/src/frontend/css/base.css">
   <link rel="stylesheet" href="/src/frontend/css/components.css">
   <link rel="stylesheet" href="/src/frontend/css/layout.css">
@@ -36,14 +36,15 @@
   <header class="site">
     <div class="inner container nav-3">
       <div class="left flex ai-c" style="gap:8px">
-        <a class="btn btn--subtle" href="/dashboard" data-i18n="nav.dashboard">Dashboard</a>
+        <a class="btn btn--subtle" href="/home" data-i18n="nav.home">Home</a>
+        <a id="newpost-link" class="btn" href="/create" style="display:none" data-i18n="nav.new_post">New Post</a>
+      </div>
+      <nav class="flex ai-c" style="gap:8px">
         <a class="btn btn--ghost" href="/notifications" aria-label="Notifications">
             <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 7h18s-3 0-3-7" />
             <path d="M13.73 21a2 2 0 0 1-3.46 0" />
           </svg>
         </a>
-      </div>
-      <nav class="flex ai-c" style="gap:8px">
         <a id="login-link" class="btn btn--subtle" href="/login" data-i18n="nav.login">Login</a>
         <button id="logout-btn" class="btn btn--ghost" style="display:none" data-i18n="nav.logout">Logout</button>
       </nav>
@@ -51,7 +52,6 @@
   </header>
 
   <main class="container">
-{{ ... }}
     <section class="card">
       <h1 style="margin-top:0">Account settings</h1>
       <p class="hint">Update your language preferences, test notifications, or change your password.</p>
@@ -61,6 +61,10 @@
       <article class="settings-section" id="prefs-section">
         <h2>Language preference</h2>
         <p class="hint">Choose the default language we use for UI, translations, and summaries.</p>
+        <label class="flex ai-c" style="gap:8px; flex-wrap:wrap">
+          <span>Display name</span>
+          <input id="display-name" class="input" type="text" maxlength="80" placeholder="Your display name" style="max-width:320px">
+        </label>
         <label class="flex ai-c" style="gap:8px; flex-wrap:wrap">
           <span>Default language</span>
           <select id="locale" class="input" style="max-width:220px">
@@ -90,13 +94,15 @@
             <option value="es">Español (Spanish)</option>
             <option value="sv">Svenska (Swedish)</option>
           </select>
-          <button id="btn-save-locale" class="btn">Save</button>
         </label>
+        <div class="settings-actions" style="margin-top:8px">
+          <button id="btn-save-preferences" class="btn" type="button">Save changes</button>
+        </div>
       </article>
 
       <article class="settings-section" id="notifications-section">
         <h2>Notifications</h2>
-        <p class="hint">Enable browser notifications to stay informed while LangSum runs in the background.</p>
+        <p class="hint">Enable browser notifications to stay informed while inTXTonic runs in the background.</p>
         <div class="settings-actions">
           <button id="btn-test-notify" class="btn btn--subtle" type="button">Try notification</button>
         </div>
@@ -120,12 +126,21 @@
           </div>
         </form>
       </article>
+
+      <article class="settings-section" id="account-section">
+        <h2>Danger zone</h2>
+        <p class="hint">Deleting your account will remove your profile, posts, and personal data. This action cannot be undone.</p>
+        <div class="settings-actions">
+          <button id="btn-delete-account" class="btn btn--danger" type="button">Delete account</button>
+        </div>
+        <div id="delete-account-msg" class="badge" style="display:none; margin-top:12px"></div>
+      </article>
     </section>
   </main>
 
   <footer class="site">
     <div class="inner container flex ai-c jc-b">
-      <div> <span id="year"></span> LangSum</div>
+      <div> <span id="year"></span> inTXTonic</div>
       <div class="hide-sm">Built with Windsurf guidelines</div>
     </div>
   </footer>
@@ -134,7 +149,7 @@
     import { authHeaders, getToken, clearToken, me } from '/src/frontend/js/auth.js?v=2';
     import { showToast } from '/src/frontend/js/toast.js';
     import { ensureNotifyPermission, notify } from '/src/frontend/js/notify.js';
-    import { t } from '/src/frontend/js/i18n-runtime.js';
+    import { t, setLanguage } from '/src/frontend/js/i18n-runtime.js';
 
     document.getElementById('year').textContent = new Date().getFullYear().toString();
 
@@ -143,14 +158,26 @@
       window.location.href = '/login/';
     }
 
+    const loginLink = document.getElementById('login-link');
     const profileLink = document.getElementById('profile-link');
     const logoutBtn = document.getElementById('logout-btn');
+    const newPostLink = document.getElementById('newpost-link');
+    if (loginLink) {
+      loginLink.style.display = 'none';
+    }
+    if (logoutBtn) {
+      logoutBtn.style.display = 'inline-flex';
+    }
+
+    const displayNameInput = document.getElementById('display-name');
     const localeSelect = document.getElementById('locale');
-    const saveLocaleBtn = document.getElementById('btn-save-locale');
+    const savePrefsBtn = document.getElementById('btn-save-preferences');
     const passwordForm = document.getElementById('password-form');
     const resetPasswordBtn = document.getElementById('reset-password-form');
     const currentPasswordInput = document.getElementById('current-password');
     const newPasswordInput = document.getElementById('new-password');
+    const deleteBtn = document.getElementById('btn-delete-account');
+    const deleteMsg = document.getElementById('delete-account-msg');
 
     logoutBtn.addEventListener('click', async () => {
       try{ await fetch('/auth/logout', { method:'POST', headers:{ ...authHeaders() } }); }catch{}
@@ -166,24 +193,44 @@
       profileLink.style.display = 'none';
     }
 
-    saveLocaleBtn.addEventListener('click', async () => {
+    savePrefsBtn.addEventListener('click', async () => {
       const value = (localeSelect.value || '').trim();
-      saveLocaleBtn.setAttribute('disabled','true');
+      const displayName = displayNameInput ? displayNameInput.value.trim() : '';
+      savePrefsBtn.setAttribute('disabled','true');
       try{
         const res = await fetch('/users/me', {
           method:'PATCH',
           headers:{ 'Content-Type':'application/json', ...authHeaders() },
-          body: JSON.stringify({ locale: value || null })
+          body: JSON.stringify({
+            locale: value || null,
+            display_name: displayName ? displayName : null
+          })
         });
         if(!res.ok) throw new Error(await res.text());
         const updated = await res.json();
+        const lang = updated.locale || 'en';
+        if (displayNameInput) {
+          displayNameInput.value = updated.display_name || '';
+        }
         localeSelect.value = updated.locale || '';
+        try {
+          if (updated.locale) {
+            localStorage.setItem('ui_lang', updated.locale);
+          } else {
+            localStorage.removeItem('ui_lang');
+          }
+        } catch {}
+        await setLanguage(lang);
+        try {
+          const { refreshAuthUI } = await import('/src/frontend/js/auth.js?v=2');
+          refreshAuthUI();
+        } catch {}
         showToast(t('toast.saved'),'ok');
       }catch(err){
         console.error('Failed to save locale', err);
         showToast(t('toast.error'),'err');
       }finally{
-        saveLocaleBtn.removeAttribute('disabled');
+        savePrefsBtn.removeAttribute('disabled');
       }
     });
 
@@ -194,7 +241,7 @@
           showToast('Enable notifications in your browser settings','warn');
           return;
         }
-        await notify({ title: 'LangSum', body: 'Notifications are enabled', icon: '/src/frontend/assets/icons/notify.svg' });
+        await notify({ title: 'inTXTonic', body: 'Notifications are enabled', icon: '/src/frontend/assets/icons/notify.svg' });
         showToast('Notification sent','ok');
       }catch(err){
         console.error('Notification test failed', err);
@@ -239,6 +286,38 @@
       currentPasswordInput.focus();
     });
 
+    deleteBtn.addEventListener('click', async () => {
+      deleteMsg.style.display = 'none';
+      const confirmed = window.confirm('Are you sure you want to delete your account? This cannot be undone.');
+      if(!confirmed){
+        return;
+      }
+      deleteBtn.disabled = true;
+      try{
+        const res = await fetch('/users/me', {
+          method: 'DELETE',
+          headers: { ...authHeaders() }
+        });
+        if(!res.ok){
+          const text = await res.text();
+          throw new Error(text || 'Delete failed');
+        }
+        showToast('Account deleted', 'ok');
+        deleteMsg.textContent = 'Account deleted. Redirecting you to the home page…';
+        deleteMsg.className = 'badge';
+        deleteMsg.style.display = 'inline-block';
+        clearToken();
+        setTimeout(() => { window.location.href = '/'; }, 1800);
+      }catch(err){
+        console.error('Failed to delete account', err);
+        deleteMsg.textContent = 'Unable to delete the account right now.';
+        deleteMsg.className = 'badge badge--err';
+        deleteMsg.style.display = 'inline-block';
+        showToast('Delete failed', 'err');
+        deleteBtn.disabled = false;
+      }
+    });
+
     (async () => {
       try {
         const user = await me();
@@ -250,6 +329,9 @@
           profileLink.href = `/user/${encodeURIComponent(user.handle)}`;
           const label = (user.display_name || user.handle || '').trim();
           if (label) profileLink.textContent = label;
+        }
+        if (displayNameInput) {
+          displayNameInput.value = user.display_name || '';
         }
         localeSelect.value = user.locale || '';
       } catch (err) {

@@ -8,7 +8,16 @@ export async function checkWithOllama(sequence) {
     const MODEL = process.env.OLLAMA_MODEL || "gemma3:1b";
 
     try {
-        const response = await fetch(`${BASE.replace(/\/$/, "")}/api/chat/completions`, {
+        const normalizedBase = BASE.replace(/\/$/, "");
+        let endpoint;
+        if (/\/api\/openai$/i.test(normalizedBase)) {
+            endpoint = `${normalizedBase}/v1/chat/completions`;
+        } else if (/\/api$/i.test(normalizedBase)) {
+            endpoint = `${normalizedBase}/chat/completions`;
+        } else {
+            endpoint = `${normalizedBase}/api/chat/completions`;
+        }
+        const response = await fetch(endpoint, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
@@ -28,8 +37,15 @@ export async function checkWithOllama(sequence) {
         });
 
         if (!response.ok) {
-            console.error("Ollama API Error:", response.status);
-            return "(Fehler beim LLM-Request)";
+            let errorText = "";
+            try {
+                errorText = await response.text();
+            } catch (readErr) {
+                errorText = String(readErr);
+            }
+        console.error(`Ollama API Error (${response.status} @ ${endpoint}):`, errorText);
+            const detail = errorText ? ` ${errorText}` : "";
+            return `(Fehler beim LLM-Request: ${response.status}${detail})`;
         }
 
         const data = await response.json();
@@ -37,7 +53,7 @@ export async function checkWithOllama(sequence) {
 
     } catch (error) {
         console.error("LLM-Request fehlgeschlagen:", error);
-        return "(Verbindungsfehler mit Ollama)";
+        return `(Verbindungsfehler mit Ollama: ${error?.message || error})`;
     }
 }
 

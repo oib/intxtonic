@@ -69,6 +69,28 @@ export async function resendConfirmation(){
   return res.json().catch(() => ({}));
 }
 
+export async function requestMagicLink(handleOrEmail){
+  const res = await fetch('/auth/request-magic-link', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ handle_or_email: handleOrEmail })
+  });
+  if(!res.ok) throw new Error(await res.text());
+  return res.json().catch(() => ({}));
+}
+
+export async function consumeMagicLink(token){
+  const res = await fetch('/auth/consume-magic-link', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token })
+  });
+  if(!res.ok) throw new Error(await res.text());
+  const data = await res.json().catch(() => ({}));
+  if(data?.access_token) saveToken(data.access_token);
+  return data;
+}
+
 export async function me(){
   const res = await fetch('/auth/me',{ headers:{ ...authHeaders() } });
   if(!res.ok) throw new Error(await res.text());

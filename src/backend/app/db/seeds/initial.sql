@@ -66,6 +66,28 @@ INSERT INTO app.account_roles (account_id, role_id)
 SELECT a.id, r.id FROM a, r
 ON CONFLICT DO NOTHING;
 
+-- Admin account: user4
+INSERT INTO app.accounts (id, handle, display_name, email, locale, password_hash)
+VALUES (
+  gen_random_uuid(),
+  'user4',
+  'Admin Four',
+  'user4@intxtonic.net',
+  'en',
+  '$2b$12$7u3qZMyYRsK4LK3LEdA.UO7nPm5bL/4IWynfLSoPnAfe.MhMeBseS'
+)
+ON CONFLICT (handle) DO NOTHING;
+
+-- Attach admin role to user4
+WITH a AS (
+  SELECT id FROM app.accounts WHERE handle = 'user4'
+), r AS (
+  SELECT id FROM app.roles WHERE name = 'admin'
+)
+INSERT INTO app.account_roles (account_id, role_id)
+SELECT a.id, r.id FROM a, r
+ON CONFLICT DO NOTHING;
+
 -- Baseline languages
 INSERT INTO app.languages (code, label) VALUES
   ('en','English'),

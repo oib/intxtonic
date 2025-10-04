@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>inTXTonic • Magic Login</title>
+  <link rel="stylesheet" href="/src/frontend/css/base.css">
+  <link rel="stylesheet" href="/src/frontend/css/components.css">
+  <link rel="stylesheet" href="/src/frontend/css/layout.css">
+  <style>
+    main { min-height: 100dvh; display: grid; place-items: center; padding: 16px; }
+    .card { max-width: 460px; width: 100%; }
+  </style>
+  <script type="module" src="/src/frontend/js/i18n-runtime.js" data-i18n-init></script>
+</head>
+<body>
+  <main class="container">
+    <section class="card" id="view-loading">
+      <h1>Signing you in…</h1>
+      <p class="hint">Hold on while we confirm your one-time login link.</p>
+    </section>
+
+    <section class="card" id="view-success" style="display:none">
+      <h1>Welcome back!</h1>
+      <p class="hint">You're signed in. Redirecting you to your home feed.</p>
+      <div class="flex" style="gap:8px; flex-wrap:wrap">
+        <a class="btn" href="/home">Go to home</a>
+        <a class="btn btn--subtle" href="/dashboard">Open dashboard</a>
+      </div>
+    </section>
+
+    <section class="card" id="view-error" style="display:none">
+      <div class="status-icon">⚠️</div>
+      <h1>Magic link issue</h1>
+      <p id="error-message" class="hint">We couldn’t sign you in. The link may be invalid or expired.</p>
+      <div class="flex" style="gap:8px; flex-wrap:wrap">
+        <a class="btn" href="/login">Back to login</a>
+        <a class="btn btn--subtle" href="/home">Go to home</a>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    import { consumeMagicLink } from '/src/frontend/js/auth.js';
+    import { showToast } from '/src/frontend/js/toast.js';
+
+    const viewLoading = document.getElementById('view-loading');
+    const viewSuccess = document.getElementById('view-success');
+    const viewError = document.getElementById('view-error');
+    const errorMessage = document.getElementById('error-message');
+
+    function show(view){
+      const views = [viewLoading, viewSuccess, viewError].filter(Boolean);
+      views.forEach(v => { v.style.display = 'none'; });
+      if(view){
+        view.style.display = 'block';
+      }
+    }
+
+    function parseErrorMessage(err){
+      if(!err) return 'We could not sign you in with that link.';
+      if(typeof err === 'string'){ return err; }
+      if(err?.message){
+        try {
+          const parsed = JSON.parse(err.message);
+          if(parsed?.detail) return parsed.detail;
+        } catch {}
+        return err.message;
+      }
+      return 'We could not sign you in with that link.';
+    }
+
+    const params = new URLSearchParams(location.search);
+    const token = params.get('token');
+
+    async function runMagicLogin(){
+      if(!token){
+        errorMessage.textContent = 'Missing magic login token. Request a new email from the login page.';
+        show(viewError);
+        return;
+      }
+      try {
+        show(viewLoading);
+        await consumeMagicLink(token);
+        showToast('Signed in', 'ok');
+        show(viewSuccess);
+        setTimeout(() => { window.location.href = '/home'; }, 2000);
+      } catch (err) {
+        const message = parseErrorMessage(err);
+        errorMessage.textContent = message;
+        show(viewError);
+        showToast('Unable to use magic link', 'err');
+      }
+    }
+
+    runMagicLogin();
+  </script>
+</body>
+</html>

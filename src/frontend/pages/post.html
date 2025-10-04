@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LangSum • Post</title>
+  <title>inTXTonic • Post</title>
   <link rel="preload" href="/src/frontend/css/base.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
   <noscript><link rel="stylesheet" href="/src/frontend/css/base.css"></noscript>
   <link rel="preload" href="/src/frontend/css/components.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
@@ -96,7 +96,7 @@
 
   <footer class="site">
     <div class="inner container flex ai-c jc-b">
-      <div> &copy; <span id="year"></span> LangSum</div>
+      <div> &copy; <span id="year"></span> inTXTonic</div>
       <div class="hide-sm">Built with Windsurf guidelines</div>
     </div>
   </footer>
@@ -164,7 +164,7 @@
       try { await fetch('/auth/logout', { method: 'POST', headers: { ...authHeaders() } }); } catch {}
       clearToken();
       showToast(t('toast.signed_out'),'ok');
-      window.location.href = '/home';
+      window.location.href = '/';
     });
     refreshAuthUI();
 
@@ -475,7 +475,10 @@
         const res = await fetch(`/posts/${postId}/tags`, { headers:{ ...authHeaders() }});
         if(!res.ok) throw new Error(await res.text());
         const rows = await res.json();
-        wrap.innerHTML = rows.length ? rows.map(t => `<span class="badge">#${t.slug}</span>`).join('') : '';
+        wrap.innerHTML = rows.length ? rows.map(t => {
+          const slug = encodeURIComponent(t.slug);
+          return `<a class="badge" href="/tags/${slug}">#${t.slug}</a>`;
+        }).join('') : '';
       }catch(err){ /* ignore */ }
     }
 

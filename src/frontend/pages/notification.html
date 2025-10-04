@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LangSum • Notifications</title>
+  <title>inTXTonic • Notifications</title>
   <link rel="stylesheet" href="/src/frontend/css/base.css">
   <link rel="stylesheet" href="/src/frontend/css/components.css">
   <link rel="stylesheet" href="/src/frontend/css/layout.css">
@@ -61,11 +61,10 @@
   <header class="site">
     <div class="inner container nav-3">
       <div class="left flex ai-c" style="gap:8px">
-        <a class="btn btn--subtle" href="/dashboard/" data-i18n="nav.dashboard">Dashboard</a>
-        <a class="btn btn--subtle" href="/tags/top">Top Tags</a>
+        <a class="btn btn--subtle" href="/home" data-i18n="nav.home">Home</a>
+        <a id="newpost-link" class="btn" href="/create" style="display:none" data-i18n="nav.new_post">New Post</a>
       </div>
       <nav class="flex ai-c" style="gap:8px">
-        <a class="btn btn--subtle" href="/" data-i18n="nav.home">Home</a>
         <a class="btn btn--ghost" href="/notifications" aria-label="Notifications">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 7h18s-3 0-3-7" />
@@ -98,7 +97,7 @@
 
   <footer class="site">
     <div class="inner container flex ai-c jc-b">
-      <div> <span id="year"></span> LangSum</div>
+      <div> <span id="year"></span> inTXTonic</div>
       <div class="hide-sm">Built with Windsurf guidelines</div>
     </div>
   </footer>
@@ -111,6 +110,7 @@
 
     const profileLink = document.getElementById('profile-link');
     const logoutBtn = document.getElementById('logout-btn');
+    const newPostLink = document.getElementById('newpost-link');
     const refreshBtn = document.getElementById('refresh-btn');
     const statusEl = document.getElementById('status');
     const notificationsEl = document.getElementById('notifications');
@@ -147,6 +147,7 @@
           const label = (user.display_name || user.handle || '').trim();
           if (label) profileLink.textContent = label;
         }
+        if (newPostLink) newPostLink.style.display = 'inline-flex';
         return user;
       }catch(err){
         showToast('Failed to load profile','err');

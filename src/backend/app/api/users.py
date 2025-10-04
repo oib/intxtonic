@@ -3,10 +3,13 @@ from __future__ import annotations
 from typing import Optional, List
 from pydantic import BaseModel, constr
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from datetime import datetime, timezone
+import secrets
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 
 from ..core.db import get_pool
-from ..core.deps import get_current_account_id
+from ..core.deps import get_current_account_id, require_admin
 from ..core.security import verify_password, get_password_hash
 
 router = APIRouter(prefix="/users", tags=["users"]) 
@@ -70,11 +73,26 @@ class UserTagBookmarksPage(BaseModel):
 
 class UpdateMeIn(BaseModel):
     locale: Optional[str] = None
+    display_name: Optional[str] = None
 
 
 class UpdatePasswordIn(BaseModel):
     current_password: constr(min_length=1)
     new_password: constr(min_length=8)
+
+
+class AdminUserItem(BaseModel):
+    id: str
+    handle: str
+    email: Optional[str] = None
+    created_at: Optional[str] = None
+    disabled_at: Optional[str] = None
+    is_admin: bool = False
+
+
+class AdminUserList(BaseModel):
+    items: List[AdminUserItem]
+    total: int
 
 
 @router.patch("/me", response_model=UserOut)
@@ -84,6 +102,7 @@ async def update_me(req: Request, body: UpdateMeIn, account_id: str = Depends(ge
     """
     pool = get_pool(req)
     new_locale: Optional[str] = None
+    new_display_name: Optional[str] = None
     if body.locale is not None:
         # normalize simple codes like en, de, fr-CH
         loc = body.locale.strip()
@@ -93,10 +112,28 @@ async def update_me(req: Request, body: UpdateMeIn, account_id: str = Depends(ge
             if len(loc) > 16:
                 raise HTTPException(status_code=422, detail="locale too long")
             new_locale = loc
+    if body.display_name is not None:
+        name_raw = body.display_name
+        name = name_raw.strip()
+        if not name:
+            new_display_name = None
+        else:
+            if len(name) > 80:
+                raise HTTPException(status_code=422, detail="display_name too long")
+            new_display_name = name
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
+            updates = []
+            params = []
             if body.locale is not None:
-                await cur.execute("UPDATE app.accounts SET locale=%s WHERE id=%s", (new_locale, account_id))
+                updates.append("locale=%s")
+                params.append(new_locale)
+            if body.display_name is not None:
+                updates.append("display_name=%s")
+                params.append(new_display_name)
+            if updates:
+                params.append(account_id)
+                await cur.execute(f"UPDATE app.accounts SET {', '.join(updates)} WHERE id=%s", params)
             await cur.execute(
                 """
                 SELECT id, handle, display_name, email, locale, created_at
@@ -136,6 +173,203 @@ async def change_password(req: Request, body: UpdatePasswordIn, account_id: str 
             new_hash = get_password_hash(body.new_password)
             await cur.execute("UPDATE app.accounts SET password_hash=%s WHERE id=%s", (new_hash, account_id))
     return
+
+
+@router.delete("/me", status_code=204)
+async def delete_account(req: Request, account_id: str = Depends(get_current_account_id)):
+    pool = get_pool(req)
+    now = datetime.now(timezone.utc)
+    async with pool.connection() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "SELECT handle FROM app.accounts WHERE id=%s AND deleted_at IS NULL LIMIT 1",
+                (account_id,),
+            )
+            row = await cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Account not found")
+            current_handle = row[0] or "account"
+            suffix = secrets.token_urlsafe(6)
+            recycled_handle = f"{current_handle}__deleted__{suffix}"[:80]
+            await cur.execute(
+                """
+                UPDATE app.posts
+                SET deleted_at=%s,
+                    updated_at=%s,
+                    title='[deleted]',
+                    body_md='[deleted]'
+                WHERE author_id=%s AND deleted_at IS NULL
+                """,
+                (now, now, account_id),
+            )
+            await cur.execute(
+                """
+                UPDATE app.replies
+                SET deleted_at=%s,
+                    updated_at=%s,
+                    body_md='[deleted]'
+                WHERE author_id=%s AND deleted_at IS NULL
+                """,
+                (now, now, account_id),
+            )
+            await cur.execute(
+                "DELETE FROM app.bookmarks WHERE account_id=%s",
+                (account_id,),
+            )
+            await cur.execute(
+                "DELETE FROM app.account_roles WHERE account_id=%s",
+                (account_id,),
+            )
+            await cur.execute(
+                """
+                UPDATE app.accounts
+                SET deleted_at=%s,
+                    updated_at=%s,
+                    handle=%s,
+                    email=NULL,
+                    password_hash=NULL,
+                    magic_login_token=NULL,
+                    magic_login_token_expires=NULL,
+                    magic_login_sent_at=NULL,
+                    email_confirmation_token=NULL,
+                    email_confirmation_token_expires=NULL,
+                    email_confirmation_sent_at=NULL
+                WHERE id=%s
+                """,
+                (now, now, recycled_handle, account_id),
+            )
+    return Response(status_code=204)
+
+
+@router.get("/admin", response_model=AdminUserList)
+async def admin_list_users(
+    req: Request,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    q: Optional[str] = Query(None),
+    _: None = Depends(require_admin),
+):
+    pool = get_pool(req)
+    q_like = None
+    if q:
+        q_like = f"%{q.lower().strip()}%"
+    async with pool.connection() as conn:
+        async with conn.cursor() as cur:
+            if q_like:
+                await cur.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM app.accounts a
+                    WHERE a.deleted_at IS NULL
+                      AND (
+                        lower(a.handle) LIKE %s OR
+                        lower(COALESCE(a.email, '')) LIKE %s
+                      )
+                    """,
+                    (q_like, q_like),
+                )
+            else:
+                await cur.execute(
+                    "SELECT COUNT(*) FROM app.accounts a WHERE a.deleted_at IS NULL",
+                )
+            total = (await cur.fetchone())[0]
+
+            if q_like:
+                await cur.execute(
+                    """
+                    SELECT a.id, a.handle, a.email, a.created_at, a.disabled_at,
+                           EXISTS (
+                             SELECT 1
+                             FROM app.account_roles ar
+                             JOIN app.roles r ON r.id = ar.role_id
+                             WHERE ar.account_id = a.id AND lower(r.name) = 'admin'
+                           ) AS is_admin
+                    FROM app.accounts a
+                    WHERE a.deleted_at IS NULL
+                      AND (
+                        lower(a.handle) LIKE %s OR
+                        lower(COALESCE(a.email, '')) LIKE %s
+                      )
+                    ORDER BY a.created_at DESC
+                    LIMIT %s OFFSET %s
+                    """,
+                    (q_like, q_like, limit, offset),
+                )
+            else:
+                await cur.execute(
+                    """
+                    SELECT a.id, a.handle, a.email, a.created_at, a.disabled_at,
+                           EXISTS (
+                             SELECT 1
+                             FROM app.account_roles ar
+                             JOIN app.roles r ON r.id = ar.role_id
+                             WHERE ar.account_id = a.id AND lower(r.name) = 'admin'
+                           ) AS is_admin
+                    FROM app.accounts a
+                    WHERE a.deleted_at IS NULL
+                    ORDER BY a.created_at DESC
+                    LIMIT %s OFFSET %s
+                    """,
+                    (limit, offset),
+                )
+            rows = await cur.fetchall()
+    items = [
+        AdminUserItem(
+            id=str(r[0]),
+            handle=r[1],
+            email=r[2],
+            created_at=r[3].isoformat() if r[3] else None,
+            disabled_at=r[4].isoformat() if r[4] else None,
+            is_admin=bool(r[5]),
+        )
+        for r in rows
+    ]
+    return AdminUserList(items=items, total=total)
+
+
+@router.post("/admin/{account_id}/disable", status_code=204)
+async def admin_disable_user(
+    account_id: str,
+    req: Request,
+    _: None = Depends(require_admin),
+):
+    pool = get_pool(req)
+    now = datetime.now(timezone.utc)
+    async with pool.connection() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                """
+                UPDATE app.accounts
+                SET disabled_at=%s
+                WHERE id=%s AND deleted_at IS NULL AND disabled_at IS NULL
+                """,
+                (now, account_id),
+            )
+            if cur.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Account not found or already disabled")
+    return Response(status_code=204)
+
+
+@router.post("/admin/{account_id}/enable", status_code=204)
+async def admin_enable_user(
+    account_id: str,
+    req: Request,
+    _: None = Depends(require_admin),
+):
+    pool = get_pool(req)
+    async with pool.connection() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                """
+                UPDATE app.accounts
+                SET disabled_at=NULL
+                WHERE id=%s AND deleted_at IS NULL AND disabled_at IS NOT NULL
+                """,
+                (account_id,),
+            )
+            if cur.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Account not found or not disabled")
+    return Response(status_code=204)
 
 @router.get("/{handle}", response_model=UserOut)
 async def get_user(req: Request, handle: str):

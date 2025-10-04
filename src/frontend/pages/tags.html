@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LangSum • Tag</title>
+  <title>inTXTonic • Tag</title>
   <link rel="stylesheet" href="/src/frontend/css/base.css">
   <link rel="stylesheet" href="/src/frontend/css/components.css">
   <link rel="stylesheet" href="/src/frontend/css/layout.css">
@@ -13,7 +13,7 @@
     <div class="inner container flex ai-c jc-b">
       <div class="brand flex ai-c" style="gap:8px">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#ff7a1a"/></svg>
-        <strong>LangSum</strong>
+        <strong>inTXTonic</strong>
       </div>
       <nav>
         <a class="btn btn--subtle" href="/home">Home</a>
@@ -59,7 +59,7 @@
 
   <footer class="site">
     <div class="inner container flex ai-c jc-b">
-      <div> <span id="year"></span> LangSum</div>
+      <div> <span id="year"></span> inTXTonic</div>
       <div class="hide-sm">Built with Windsurf guidelines</div>
     </div>
   </footer>
@@ -114,7 +114,7 @@
       try { await fetch('/auth/logout', { method: 'POST', headers: { ...authHeaders() } }); } catch {}
       clearToken();
       showToast('Signed out','ok');
-      window.location.href = '/home';
+      window.location.href = '/';
     });
     refreshAuthUI();
 

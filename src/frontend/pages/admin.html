@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LangSum • Admin</title>
+  <title>inTXTonic • Admin</title>
   <style>
     /* Normalize heading sizes/margins for sectioned headings to silence browser warnings */
     h1 { font-size: 1.75rem; margin: 0 0 0.5rem 0; }
@@ -24,6 +24,7 @@
         <a id="i18n-link" class="btn btn--subtle" href="/admin/i18n" style="display:none" data-i18n="admin.i18n">Translations</a>
       </div>
       <nav class="flex ai-c" style="gap:8px">
+        <a id="user-access-link" class="btn btn--subtle" href="/admin/users" style="display:none">User access</a>
         <a class="btn btn--subtle" href="/dashboard" data-i18n="nav.dashboard">Dashboard</a>
         <a id="login-link" class="btn btn--subtle" href="/login" data-i18n="nav.login">Login</a>
         <button id="logout-btn" class="btn btn--ghost" style="display:none" data-i18n="nav.logout">Logout</button>
@@ -71,10 +72,7 @@
       </div>
       <div class="col-12">
         <div class="card">
-          <div class="flex ai-c jc-b" style="margin-bottom:12px">
-            <h2 data-i18n="admin.tags" style="margin:0">Tag Management</h2>
-            <a class="btn btn--subtle" href="/admin/users">User access</a>
-          </div>
+          <h2 data-i18n="admin.tags" style="margin:0 0 12px">Tag Management</h2>
           <div class="flex ai-c" style="gap:8px; margin-bottom:12px">
             <input id="q-tag-admin" class="input" placeholder="Search tags..." data-i18n-placeholder="home.search_tags" style="max-width:240px">
             <button id="btn-search-tags" class="btn btn--subtle" data-i18n="dashboard.search">Search</button>
@@ -99,7 +97,7 @@
 
   <footer class="site">
     <div class="inner container flex ai-c jc-b">
-      <div> <span id="year"></span> LangSum</div>
+      <div> <span id="year"></span> inTXTonic</div>
       <div class="hide-sm">Built with Windsurf guidelines</div>
     </div>
   </footer>
@@ -119,7 +117,7 @@
       try { await fetch('/auth/logout', { method: 'POST', headers: { ...authHeaders() } }); } catch {}
       clearToken();
       showToast(t('toast.signed_out'),'ok');
-      window.location.href = '/home';
+      window.location.href = '/';
     });
     refreshAuthUI();
 
@@ -329,9 +327,11 @@
 
     async function renderTags(rows){
       const html = rows.map(t => {
+        const restrictedBadge = t.is_restricted ? '<span class="badge badge--warn">restricted</span>' : '';
         const right = isAdmin
           ? `<div class="flex ai-c" style="gap:8px">
               <button class="btn btn--subtle toggle-ban" data-id="${t.id}" data-banned="${t.is_banned}">${t.is_banned ? 'Unban' : 'Ban'}</button>
+              ${t.is_restricted ? `<button class="btn btn--ghost unrestrict-tag" data-id="${t.id}">Open tag</button>` : ''}
             </div>`
           : '';
         return `
@@ -340,6 +340,7 @@
               <span class="badge">#${t.slug}</span>
               <span>${t.label || ''}</span>
               ${t.is_banned ? '<span class="badge badge--err">banned</span>' : ''}
+              ${restrictedBadge}
             </div>
             ${right}
           </div>
@@ -359,6 +360,23 @@
               showToast(banned ? 'Tag unbanned' : 'Tag banned', 'ok');
               await loadTagsCombined(lastQuery);
             }catch(err){ showToast('Failed to toggle', 'err'); }
+          });
+        });
+        elTagsList.querySelectorAll('button.unrestrict-tag').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const id = btn.getAttribute('data-id');
+            btn.disabled = true;
+            try {
+              const res = await fetch(`/tags/${id}/unrestrict`, { method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' } });
+              if (!res.ok) throw new Error(await res.text());
+              showToast('Tag opened for all users', 'ok');
+              await loadTagsCombined(lastQuery);
+            } catch (err) {
+              console.error('unrestrict failed', err);
+              showToast('Failed to open tag', 'err');
+            } finally {
+              btn.disabled = false;
+            }
           });
         });
       }
@@ -396,6 +414,7 @@
           inp.value = '';
           showToast('Tag created', 'ok');
           await loadTagsCombined();
+          await loadTagVisibility(lastVisibilityQuery);
         }catch(err){
           showToast('Create failed', 'err');
         }finally{
@@ -433,6 +452,8 @@
         // show Translations link for admins/moderators
         const i18nLink = document.getElementById('i18n-link');
         if (i18nLink) i18nLink.style.display = 'inline-flex';
+        const userAccessLink = document.getElementById('user-access-link');
+        if (userAccessLink) userAccessLink.style.display = 'inline-flex';
         return true;
       } catch (err) {
         showToast(t('toast.verify_failed'), 'err');
@@ -510,11 +531,16 @@
     (async () => {
       const ok = await checkAdminAccess();
       if (ok) {
-        await Promise.all([
-          loadTagsCombined(''),
-          loadTagVisibility(''),
-        ]);
         setupSSE();
+        try {
+          await Promise.all([
+            loadTagsCombined(''),
+            loadTagVisibility(''),
+          ]);
+        } catch (err) {
+          console.error('Admin data load failed', err);
+          showToast('Unable to load admin data right now', 'warn');
+        }
       }
     })();
   </script>

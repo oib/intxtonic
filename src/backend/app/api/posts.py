@@ -7,13 +7,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from ..core.db import get_pool
 from ..core.config import get_settings
-from ..core.deps import get_current_account_id, require_role, require_admin
+from ..core.deps import get_current_account_id, require_role, require_admin, is_admin_account
 from ..core.notify import publish
 from .auth import csrf_validate
 import logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/posts", tags=["posts"]) 
+
+from .tags import make_slug
 
 
 class PostTagOut(BaseModel):
@@ -718,26 +720,57 @@ async def get_my_vote(post_id: str, account_id: str = Depends(get_current_accoun
 
 class TagAttachIn(BaseModel):
     slug: str
+    label: Optional[str] = None
 
 
 @router.post("/{post_id}/tags", response_model=OkOut)
 async def attach_tag(
     post_id: str,
     body: TagAttachIn,
-    _: str = Depends(get_current_account_id),  # any logged-in user
+    account_id: str = Depends(get_current_account_id),
     pool = Depends(get_pool),
     csrf: bool = Depends(csrf_validate),
 ):
-    slug = (body.slug or "").strip().lower()
+    raw_slug = (body.slug or "").strip()
+    slug = make_slug(raw_slug)
     if not slug:
         raise HTTPException(status_code=400, detail="slug required")
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
+            await cur.execute(
+                "SELECT author_id FROM app.posts WHERE id=%s AND deleted_at IS NULL",
+                (post_id,),
+            )
+            owner_row = await cur.fetchone()
+            if not owner_row:
+                raise HTTPException(status_code=404, detail="post not found")
+            owner_id = str(owner_row[0]) if owner_row[0] is not None else None
+            is_owner = owner_id and owner_id == account_id
+            admin = await is_admin_account(pool, account_id)
+            if not (is_owner or admin):
+                raise HTTPException(status_code=403, detail="only the author can modify tags")
             # find tag and ensure not banned
             await cur.execute("SELECT id, is_banned FROM app.tags WHERE slug=%s", (slug,))
             row = await cur.fetchone()
             if not row:
-                raise HTTPException(status_code=404, detail="tag not found")
+                label = (body.label or raw_slug or slug).strip()
+                if not label:
+                    label = slug.replace('-', ' ').replace('_', ' ').replace('.', ' ').title() or slug
+                await cur.execute(
+                    """
+                    INSERT INTO app.tags (id, slug, label, is_restricted)
+                    VALUES (gen_random_uuid(), %s, %s, false)
+                    ON CONFLICT (slug) DO NOTHING
+                    RETURNING id, is_banned
+                    """,
+                    (slug, label),
+                )
+                row = await cur.fetchone()
+                if not row:
+                    await cur.execute("SELECT id, is_banned FROM app.tags WHERE slug=%s", (slug,))
+                    row = await cur.fetchone()
+                if not row:
+                    raise HTTPException(status_code=500, detail="failed to create tag")
             tag_id, is_banned = row[0], row[1]
             if is_banned:
                 raise HTTPException(status_code=403, detail="tag is banned")

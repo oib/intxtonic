@@ -9,20 +9,15 @@
   <link rel="stylesheet" href="/src/frontend/css/layout.css">
   <link rel="stylesheet" href="/src/frontend/css/pages/index.css">
   <script type="module" src="/src/frontend/js/i18n-runtime.js" data-i18n-init></script>
+  <script type="module" src="/src/frontend/js/i18n-ui.js"></script>
 </head>
 <body>
   <header class="site">
     <div class="inner container nav-3">
       <div class="left">
         <label class="lang-picker" for="landing-lang">
-          <span class="visually-hidden">Select language</span>
-          <select id="landing-lang" aria-label="Select language">
-            <option value="en">English</option>
-            <option value="de">Deutsch</option>
-            <option value="es">Español</option>
-            <option value="fr">Français</option>
-            <option value="ja">日本語</option>
-          </select>
+          <span class="visually-hidden" data-i18n="landing.lang_label">Select language</span>
+          <select id="landing-lang" aria-label="Select language"></select>
         </label>
       </div>
       <nav class="flex ai-c" style="gap:8px">
@@ -34,94 +29,92 @@
   <main class="container">
     <section id="hero" class="hero card hero-card">
       <div class="hero-card__body">
-        <h1 data-i18n="home.welcome_title">Welcome to intxtonic</h1>
-        <p class="mb-6" data-i18n="home.welcome_tagline">
-          <strong>Own your language stack end-to-end.</strong> Translate content, localize the UI, and summarize insights without sending data to external vendors. Explore the systems that automate localization, governance, and developer workflows across every locale.
+        <h1 data-i18n="landing.hero_title">Welcome to inTXTonic</h1>
+        <p class="mb-6">
+          <strong data-i18n="landing.hero_tagline_strong">Own your language stack end-to-end.</strong>
+          <span data-i18n="landing.hero_tagline_rest">Translate content, localize the UI, and summarize insights without sending data to external vendors. Explore the systems that automate localization, governance, and developer workflows across every locale.</span>
         </p>
-        <div class="hero-cta">
-          <p><em>Ready to explore? <a href="/login/" class="link">Sign in</a> to start discovering content or continue browsing as a guest.</em></p>
-        </div>
+        <p class="hero-summary">
+          Self-hosted translation engine, configurable UI localization, culture &amp; language insights, developer-first workflow automation, tech briefings, governance &amp; compliance controls, policy &amp; society briefs, and localization ops readiness—all in one platform.
+        </p>
+        <p class="hint" data-i18n="landing.topics_hint">inTXTonic currently supports 24+ languages through AI-assisted translation and community localization.</p>
       </div>
       <div class="hero-card__illustration">
-        <img src="/src/frontend/assets/topics/hero.jpg" alt="Neon doorway symbolizing access to multilingual knowledge" loading="lazy">
+        <img src="/src/frontend/assets/topics/hero.jpg" alt="Neon waypoint symbolizing access to multilingual knowledge" loading="lazy">
       </div>
     </section>
-
     <section class="topics card">
-      <div class="topics-head">
-        <h2>Discover topics</h2>
-        <p class="hint">intxtonic currently supports 24+ languages through AI-assisted translation and community localization.</p>
-      </div>
-      <div class="topics-grid">
         <article class="topic-card topic-card--engine">
           <div class="topic-card__body">
-            <h3>Self-hosted translation engine</h3>
-            <p>Run multilingual translation and summarization workloads on your own hardware with built-in queueing, caching, and fallbacks for 24+ locales.</p>
-            <div class="topic-meta">Focus tags: `engine`, `ai`, `self-hosted`</div>
-            <a href="/features/translation-engine.html" class="link">Explore engine docs</a>
+            <h3 data-i18n="landing.topic_engine_title">Self-hosted translation engine</h3>
+            <p data-i18n="landing.topic_engine_body">Run multilingual translation and summarization workloads on your own hardware with built-in queueing, caching, and fallbacks for 24+ locales.</p>
+            <div class="topic-meta" data-i18n="landing.topic_engine_meta">Focus tags: `engine`, `ai`, `self-hosted`</div>
+            <a href="/features/translation-engine.html" class="link" data-i18n="landing.topic_engine_cta">Explore engine docs</a>
           </div>
-          <div class="topic-card__illustration" role="presentation" aria-hidden="true"></div>
+          <div class="topic-card__illustration engine-illustration" role="presentation" aria-hidden="true">
+            <span class="visually-hidden">Circuit illustration of the self-hosted translation engine</span>
+          </div>
         </article>
         <article class="topic-card topic-card--uilocal">
           <div class="topic-card__body">
-            <h3>Configurable UI localization</h3>
-            <p>Manage interface strings, locales, and fallback rules from a single dashboard, with instant previews before rollout.</p>
-            <div class="topic-meta">Focus tags: `locales`, `ui`, `preview`</div>
-            <a href="/features/ui-localization.html" class="link">Explore UI tooling</a>
+            <h3 data-i18n="landing.topic_ui_title">Configurable UI localization</h3>
+            <p data-i18n="landing.topic_ui_body">Manage interface strings, locales, and fallback rules from a single dashboard, with instant previews before rollout.</p>
+{{ ... }}
+            <a href="/features/ui-localization.html" class="link" data-i18n="landing.topic_ui_cta">Explore UI tooling</a>
           </div>
           <div class="topic-card__illustration" role="presentation" aria-hidden="true"></div>
         </article>
         <article class="topic-card topic-card--culture">
           <div class="topic-card__body">
-            <h3>Culture &amp; Language</h3>
-            <p>Stories, idioms, and cultural notes localized across every interface string, so communities see the UI and content in their language the moment you ship it.</p>
-            <div class="topic-meta">Focus tags: `culture`, `localization`, `intl`</div>
-            <a href="/features/culture-language.html" class="link">Explore culture</a>
+            <h3 data-i18n="landing.topic_culture_title">Culture &amp; Language</h3>
+            <p data-i18n="landing.topic_culture_body">Stories, idioms, and cultural notes localized across every interface string, so communities see the UI and content in their language the moment you ship it.</p>
+            <div class="topic-meta" data-i18n="landing.topic_culture_meta">Focus tags: `culture`, `localization`, `intl`</div>
+            <a href="/features/culture-language.html" class="link" data-i18n="landing.topic_culture_cta">Explore culture</a>
           </div>
           <div class="topic-card__illustration" role="presentation" aria-hidden="true"></div>
         </article>
         <article class="topic-card topic-card--devflow">
           <div class="topic-card__body">
-            <h3>Developer-first workflow</h3>
-            <p>Versioned APIs, webhooks, and CLI tooling integrate localization into CI/CD, automating releases across languages.</p>
-            <div class="topic-meta">Focus tags: `devops`, `ci/cd`, `automation`</div>
-            <a href="/features/developer-workflow.html" class="link">Explore developer docs</a>
+            <h3 data-i18n="landing.topic_dev_title">Developer-first workflow</h3>
+            <p data-i18n="landing.topic_dev_body">Versioned APIs, webhooks, and CLI tooling integrate localization into CI/CD, automating releases across languages.</p>
+            <div class="topic-meta" data-i18n="landing.topic_dev_meta">Focus tags: `devops`, `ci/cd`, `automation`</div>
+            <a href="/features/developer-workflow.html" class="link" data-i18n="landing.topic_dev_cta">Explore developer docs</a>
           </div>
           <div class="topic-card__illustration" role="presentation" aria-hidden="true"></div>
         </article>
         <article class="topic-card topic-card--tech">
           <div class="topic-card__body">
-            <h3>Tech Briefings</h3>
-            <p>Self-hosted AI pipelines translate and summarize engineering updates instantly, keeping your data in-house while surfacing insights to multilingual teams.</p>
-            <div class="topic-meta">Focus tags: `translation`, `summaries`, `ai`</div>
-            <a href="/features/tech-briefings.html" class="link">Explore tech</a>
+            <h3 data-i18n="landing.topic_tech_title">Tech Briefings</h3>
+            <p data-i18n="landing.topic_tech_body">Self-hosted AI pipelines translate and summarize engineering updates instantly, keeping your data in-house while surfacing insights to multilingual teams.</p>
+            <div class="topic-meta" data-i18n="landing.topic_tech_meta">Focus tags: `translation`, `summaries`, `ai`</div>
+            <a href="/features/tech-briefings.html" class="link" data-i18n="landing.topic_tech_cta">Explore tech</a>
           </div>
           <div class="topic-card__illustration" role="presentation" aria-hidden="true"></div>
         </article>
         <article class="topic-card topic-card--governance">
           <div class="topic-card__body">
-            <h3>Governance &amp; compliance controls</h3>
-            <p>Apply policy-specific tagging, audit trails, and retention rules so global teams stay aligned with regional regulations.</p>
-            <div class="topic-meta">Focus tags: `governance`, `compliance`, `audit`</div>
-            <a href="/features/governance-controls.html" class="link">Review governance playbook</a>
+            <h3 data-i18n="landing.topic_gov_title">Governance &amp; compliance controls</h3>
+            <p data-i18n="landing.topic_gov_body">Apply policy-specific tagging, audit trails, and retention rules so global teams stay aligned with regional regulations.</p>
+            <div class="topic-meta" data-i18n="landing.topic_gov_meta">Focus tags: `governance`, `compliance`, `audit`</div>
+            <a href="/features/governance-controls.html" class="link" data-i18n="landing.topic_gov_cta">Review governance playbook</a>
           </div>
           <div class="topic-card__illustration" role="presentation" aria-hidden="true"></div>
         </article>
         <article class="topic-card topic-card--policy">
           <div class="topic-card__body">
-            <h3>Policy &amp; Society</h3>
-            <p>Compliance updates and civic briefs stay synchronized across regions with automatic localization, ensuring stakeholders never miss critical regulatory context.</p>
-            <div class="topic-meta">Focus tags: `policy`, `compliance`, `regions`</div>
-            <a href="/features/policy-society.html" class="link">Dive into policy workflows</a>
+            <h3 data-i18n="landing.topic_policy_title">Policy &amp; Society</h3>
+            <p data-i18n="landing.topic_policy_body">Compliance updates and civic briefs stay synchronized across regions with automatic localization, ensuring stakeholders never miss critical regulatory context.</p>
+            <div class="topic-meta" data-i18n="landing.topic_policy_meta">Focus tags: `policy`, `compliance`, `regions`</div>
+            <a href="/features/policy-society.html" class="link" data-i18n="landing.topic_policy_cta">Dive into policy workflows</a>
           </div>
           <div class="topic-card__illustration" role="presentation" aria-hidden="true"></div>
         </article>
         <article class="topic-card topic-card--learning">
           <div class="topic-card__body">
-            <h3>Localization Ops</h3>
-            <p>Deploy new locales with config-driven workflows, preview UI translations, and run automated QA to guarantee parity across devices.</p>
-            <div class="topic-meta">Focus tags: `localization`, `ops`, `automation`</div>
-            <a href="/features/localization-ops.html" class="link">Explore localization</a>
+            <h3 data-i18n="landing.topic_ops_title">Localization Ops</h3>
+            <p data-i18n="landing.topic_ops_body">Deploy new locales with config-driven workflows, preview UI translations, and run automated QA to guarantee parity across devices.</p>
+            <div class="topic-meta" data-i18n="landing.topic_ops_meta">Focus tags: `localization`, `ops`, `automation`</div>
+            <a href="/features/localization-ops.html" class="link" data-i18n="landing.topic_ops_cta">Explore localization</a>
           </div>
           <div class="topic-card__illustration" role="presentation" aria-hidden="true"></div>
         </article>
@@ -138,8 +131,7 @@
 
   <script type="module">
     import { getToken, clearToken, authHeaders } from '/src/frontend/js/auth.js';
-
-    document.getElementById('year').textContent = new Date().getFullYear().toString();
+    import { initLanguageSwitcher } from '/src/frontend/js/i18n-ui.js';
 
     async function redirectIfAuthenticated(){
       const token = getToken();
@@ -156,7 +148,17 @@
       }
     }
 
-    await redirectIfAuthenticated();
+    window.addEventListener('load', async () => {
+      const yearEl = document.getElementById('year');
+      if (yearEl) {
+        yearEl.textContent = new Date().getFullYear().toString();
+      }
+      const langSelect = document.getElementById('landing-lang');
+      if (langSelect) {
+        initLanguageSwitcher(langSelect);
+      }
+      await redirectIfAuthenticated();
+    });
   </script>
 </body>
 </html>

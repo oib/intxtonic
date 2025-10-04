@@ -68,12 +68,23 @@ async def test_tags_admin_and_replies_flow():
         assert r.status_code in (200, 201), r.text
         tag = r.json()
         assert tag["slug"] == "announcements"
+        assert tag["is_restricted"] is True
+
+        r = await client.post(
+            f"/tags/{tag['id']}/unrestrict",
+            headers=auth_headers(client, admin_token),
+        )
+        assert r.status_code == 200, r.text
+        unrestrict_payload = r.json()
+        assert unrestrict_payload["is_restricted"] is False
 
         # List tags and find it
         r = await client.get("/tags?query=ann")
         assert r.status_code == 200
         rows = r.json()
-        assert any(t["id"] == tag["id"] for t in rows)
+        matching = [t for t in rows if t["id"] == tag["id"]]
+        assert matching, rows
+        assert matching[0]["is_restricted"] is False
 
         # Ban/unban
         r = await client.post(
@@ -145,3 +156,44 @@ async def test_tags_admin_and_replies_flow():
             },
         )
         assert r.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_language_tags_visible_to_guests():
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        r = await client.post(
+            "/auth/register",
+            json={
+                "handle": "langadmin",
+                "email": "langadmin@intxtonic.net",
+                "password": "LangAdmin123",
+            },
+        )
+        assert r.status_code == 200, r.text
+        await promote_to_admin("langadmin")
+        r = await client.post(
+            "/auth/login",
+            json={
+                "handle_or_email": "langadmin",
+                "password": "LangAdmin123",
+            },
+        )
+        assert r.status_code == 200
+        admin_token = r.json()["access_token"]
+
+        r = await client.post(
+            "/tags",
+            headers=auth_headers(client, admin_token),
+            json={"label": "EN"},
+        )
+        assert r.status_code in (200, 201), r.text
+        tag = r.json()
+        assert tag["slug"] == "en"
+
+        r = await client.get("/tags?query=en")
+        assert r.status_code == 200
+        rows = r.json()
+        matching = [t for t in rows if t["id"] == tag["id"]]
+        assert matching, rows
+        assert matching[0]["slug"] == "en"

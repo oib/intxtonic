@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 
 CONFIRM_TOKEN_TTL = timedelta(hours=24)
 RESEND_TOKEN_INTERVAL = timedelta(minutes=5)
+MAGIC_TOKEN_TTL = timedelta(minutes=30)
+MAGIC_TOKEN_INTERVAL = timedelta(minutes=5)
 
 
 def _now() -> datetime:
@@ -37,11 +39,24 @@ async def _send_confirmation_email(handle: str, email: str, token: str) -> None:
     link = f"{base_url}/confirm-email?token={token}"
     body = (
         f"Hi {handle},\n\n"
-        "Please confirm your LangSum email address by clicking the link below:\n"
+        "Please confirm your inTXTonic email address by clicking the link below:\n"
         f"{link}\n\n"
-        "If you did not sign up for LangSum, you can safely ignore this email."
+        "If you did not sign up for inTXTonic, you can safely ignore this email."
     )
-    await send_email("Confirm your LangSum email", body, [email])
+    await send_email("Confirm your inTXTonic email", body, [email])
+
+
+async def _send_magic_login_email(handle: str, email: str, token: str) -> None:
+    settings = get_settings()
+    base_url = settings.frontend_base_url.rstrip('/') if settings.frontend_base_url else ""
+    link = f"{base_url}/magic-login?token={token}"
+    body = (
+        f"Hi {handle},\n\n"
+        "Here's your one-time inTXTonic login link. It will expire shortly.\n"
+        f"{link}\n\n"
+        "If you did not request this link, you can ignore this email."
+    )
+    await send_email("Your inTXTonic magic login link", body, [email])
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -92,6 +107,18 @@ class ResendConfirmationOut(BaseModel):
     sent_at: str
 
 
+class MagicLinkRequestIn(BaseModel):
+    handle_or_email: str
+
+
+class MagicLinkRequestOut(BaseModel):
+    ok: bool = True
+
+
+class MagicLinkConsumeIn(BaseModel):
+    token: str
+
+
 async def _record_resend(redis, email: str) -> None:
     if not redis:
         return
@@ -113,82 +140,25 @@ async def _can_resend(redis, email: str) -> bool:
         return True
 
 
-@router.post("/register", response_model=TokenOut)
-async def register(body: RegisterIn, request: Request, response: Response, pool = Depends(get_pool)):
-    # Basic validation
-    handle = body.handle.strip()
-    email = body.email.strip() if body.email else None
-    if not handle or not body.password:
-        raise HTTPException(status_code=400, detail="handle and password required")
+async def _record_magic(redis, email: str) -> None:
+    if not redis:
+        return
+    key = f"email:magic:{email.lower()}"
+    try:
+        await redis.set(key, "1", ex=int(MAGIC_TOKEN_INTERVAL.total_seconds()))
+    except Exception:
+        pass
 
-    # Ensure unique handle
-    token_plain: Optional[str] = None
-    async with pool.connection() as conn:
-        async with conn.cursor() as cur:
-            await cur.execute(
-                "SELECT 1 FROM app.accounts WHERE lower(handle)=lower(%s) LIMIT 1",
-                (handle,),
-            )
-            if await cur.fetchone():
-                raise HTTPException(status_code=409, detail="handle already exists")
 
-            pw_hash = hash_password(body.password)
-            await cur.execute(
-                """
-                INSERT INTO app.accounts (handle, display_name, email, password_hash)
-                VALUES (%s, %s, %s, %s)
-                RETURNING id
-                """,
-                (handle, handle, email, pw_hash),
-            )
-            row = await cur.fetchone()
-            account_id = row[0]
-            if email:
-                token_plain = secrets.token_urlsafe(32)
-                token_hash = _hash_token(token_plain)
-                now = _now()
-                expires_at = now + CONFIRM_TOKEN_TTL
-                await cur.execute(
-                    """
-                    UPDATE app.accounts
-                    SET email_confirmation_token=%s,
-                        email_confirmation_token_expires=%s,
-                        email_confirmation_sent_at=%s,
-                        email_confirmed_at=NULL
-                    WHERE id=%s
-                    """,
-                    (token_hash, expires_at, now, account_id),
-                )
-
-    token = create_access_token(subject=str(account_id))
-    # Set JWT token in httpOnly cookie for security
-    # Use secure only when running over HTTPS; allow HTTP during local development
-    is_https = (request.url.scheme.lower() == "https")
-    response.set_cookie(
-        key="access_token",
-        value=f"Bearer {token}",
-        httponly=True,
-        secure=is_https,
-        samesite="strict",
-        max_age=60 * 60 * 24 * 7
-    )
-    # Issue CSRF token cookie (not httpOnly so frontend can read and send header)
-    csrf_token = secrets.token_urlsafe(32)
-    response.set_cookie(
-        key="csrf_token",
-        value=csrf_token,
-        httponly=False,
-        secure=is_https,
-        samesite="strict",
-        max_age=60 * 60  # 1 hour
-    )
-    if email and token_plain:
-        try:
-            await _send_confirmation_email(handle, email, token_plain)
-        except Exception as exc:
-            logger.exception("Failed to send confirmation email during registration", exc_info=exc)
-            raise HTTPException(status_code=500, detail="Unable to send confirmation email")
-    return TokenOut(access_token=token, account_id=str(account_id), csrf_token=csrf_token)
+async def _can_send_magic(redis, email: str) -> bool:
+    if not redis:
+        return True
+    key = f"email:magic:{email.lower()}"
+    try:
+        exists = await redis.exists(key)
+        return not bool(exists)
+    except Exception:
+        return True
 
 
 @router.post("/confirm-email", response_model=ConfirmEmailOut)
@@ -278,6 +248,126 @@ async def resend_confirmation(request: Request, account_id: str = Depends(get_cu
         logger.exception("Failed to resend confirmation email", exc_info=exc)
         raise HTTPException(status_code=500, detail="Unable to send confirmation email")
     return ResendConfirmationOut(ok=True, email=email, sent_at=now.isoformat())
+
+
+@router.post("/request-magic-link", response_model=MagicLinkRequestOut)
+async def request_magic_link(request: Request, body: MagicLinkRequestIn, pool = Depends(get_pool)):
+    key = (body.handle_or_email or "").strip()
+    if not key:
+        raise HTTPException(status_code=400, detail="handle_or_email required")
+    redis = get_redis(request)
+    handle: Optional[str] = None
+    email: Optional[str] = None
+    account_id: Optional[str] = None
+    async with pool.connection() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                """
+                SELECT id, handle, email, magic_login_sent_at
+                FROM app.accounts
+                WHERE (lower(handle)=lower(%s) OR lower(email)=lower(%s))
+                  AND deleted_at IS NULL
+                LIMIT 1
+                """,
+                (key, key),
+            )
+            row = await cur.fetchone()
+            if row:
+                account_id = str(row[0])
+                handle = row[1]
+                email = row[2]
+            else:
+                # Do not leak account existence
+                return MagicLinkRequestOut(ok=True)
+
+    if not email:
+        return MagicLinkRequestOut(ok=True)
+
+    if not await _can_send_magic(redis, email):
+        return MagicLinkRequestOut(ok=True)
+
+    token_plain = secrets.token_urlsafe(32)
+    token_hash = _hash_token(token_plain)
+    now = _now()
+    expires_at = now + MAGIC_TOKEN_TTL
+    async with pool.connection() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                """
+                UPDATE app.accounts
+                SET magic_login_token = %s,
+                    magic_login_token_expires = %s,
+                    magic_login_sent_at = %s
+                WHERE id = %s
+                """,
+                (token_hash, expires_at, now, account_id),
+            )
+
+    await _record_magic(redis, email)
+    try:
+        await _send_magic_login_email(handle or "there", email, token_plain)
+    except Exception as exc:
+        logger.exception("Failed to send magic login email", exc_info=exc)
+        raise HTTPException(status_code=500, detail="Unable to send magic login email")
+    return MagicLinkRequestOut(ok=True)
+
+
+@router.post("/consume-magic-link", response_model=TokenOut)
+async def consume_magic_link(body: MagicLinkConsumeIn, request: Request, response: Response, pool = Depends(get_pool)):
+    token = (body.token or "").strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="token required")
+    token_hash = _hash_token(token)
+    async with pool.connection() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                """
+                SELECT id, magic_login_token_expires
+                FROM app.accounts
+                WHERE magic_login_token = %s
+                LIMIT 1
+                """,
+                (token_hash,),
+            )
+            row = await cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Invalid or expired token")
+            account_id = str(row[0])
+            expires_at = row[1]
+            now = _now()
+            if expires_at and expires_at < now:
+                raise HTTPException(status_code=410, detail="Magic login token expired")
+            await cur.execute(
+                """
+                UPDATE app.accounts
+                SET magic_login_token = NULL,
+                    magic_login_token_expires = NULL,
+                    magic_login_sent_at = NULL
+                WHERE id = %s
+                """,
+                (account_id,),
+            )
+
+    token_value = create_access_token(subject=account_id)
+    is_https = (request.url.scheme.lower() == "https")
+    response.set_cookie(
+        key="access_token",
+        value=f"Bearer {token_value}",
+        httponly=True,
+        secure=is_https,
+        samesite="strict",
+        max_age=60 * 60 * 24 * 7,
+    )
+    csrf_token = secrets.token_urlsafe(32)
+    response.set_cookie(
+        key="csrf_token",
+        value=csrf_token,
+        httponly=False,
+        secure=is_https,
+        samesite="strict",
+        max_age=60 * 60,
+    )
+    return TokenOut(access_token=token_value, account_id=account_id, csrf_token=csrf_token)
 
 
 @router.post("/login", response_model=TokenOut)

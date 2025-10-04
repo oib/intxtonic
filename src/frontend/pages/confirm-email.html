@@ -3,29 +3,26 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LangSum • Confirm Email</title>
+  <title>inTXTonic • Confirm Email</title>
   <link rel="stylesheet" href="/src/frontend/css/base.css">
   <link rel="stylesheet" href="/src/frontend/css/components.css">
   <link rel="stylesheet" href="/src/frontend/css/layout.css">
   <style>
     main { min-height: 100dvh; display: grid; place-items: center; }
     .confirm-card { max-width: 480px; width: 100%; }
-    .status-icon { font-size: 42px; }
   </style>
   <script type="module" src="/src/frontend/js/i18n-runtime.js" data-i18n-init></script>
 </head>
 <body>
   <main class="container">
     <section class="card confirm-card" id="view-loading">
-      <div class="status-icon">⏳</div>
-      <h1>Confirming…</h1>
+      <h1>Confirming email…</h1>
       <p class="hint">Please wait while we verify your email address.</p>
     </section>
 
     <section class="card confirm-card" id="view-success" style="display:none">
-      <div class="status-icon">✅</div>
       <h1>Email confirmed</h1>
-      <p class="hint">Thanks! Your email address is now verified. You can continue exploring LangSum.</p>
+      <p class="hint">Thanks! Your email address is now verified. You can continue exploring inTXTonic.</p>
       <div class="flex" style="gap:8px; flex-wrap:wrap">
         <a class="btn" href="/dashboard/">Go to dashboard</a>
         <a class="btn btn--subtle" href="/home">Back to home</a>
@@ -54,8 +51,11 @@
     const btnResend = document.getElementById('btn-resend');
 
     function show(view){
-      [viewLoading, viewSuccess, viewError].forEach(v => v.style.display = 'none');
-      view.style.display = 'block';
+      const views = [viewLoading, viewSuccess, viewError].filter(Boolean);
+      views.forEach(v => { v.style.display = 'none'; });
+      if(view){
+        view.style.display = 'block';
+      }
     }
 
     const params = new URLSearchParams(location.search);
@@ -87,17 +87,19 @@
       }
     }
 
-    btnResend.addEventListener('click', async () => {
-      btnResend.disabled = true;
-      try{
-        await resendConfirmation();
-        showToast('Confirmation email resent', 'ok');
-      }catch(err){
-        showToast('Unable to resend confirmation', 'err');
-      }finally{
-        setTimeout(() => { btnResend.disabled = false; }, 4000);
-      }
-    });
+    if(btnResend){
+      btnResend.addEventListener('click', async () => {
+        btnResend.disabled = true;
+        try{
+          await resendConfirmation();
+          showToast('Confirmation email resent', 'ok');
+        }catch(err){
+          showToast('Unable to resend confirmation', 'err');
+        }finally{
+          setTimeout(() => { btnResend.disabled = false; }, 4000);
+        }
+      });
+    }
 
     runConfirmation();
   </script>
