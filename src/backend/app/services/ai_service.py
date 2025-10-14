@@ -73,7 +73,7 @@ async def translate_text(text: str, target_language: str, return_prompt: bool = 
             env['OLLAMA_MODEL'] = model
 
         result = subprocess.run(
-            ['node', 'templates/ollama_cli.mjs', json.dumps(sequence)],
+            ['node', 'src/backend/js/ollama_cli.mjs', json.dumps(sequence)],
             capture_output=True,
             text=True,
             env=env,
@@ -126,7 +126,7 @@ async def summarize_text(text: str, language: str) -> str:
             env['OLLAMA_MODEL'] = model
 
         result = subprocess.run(
-            ['node', 'templates/ollama_cli.mjs', json.dumps(sequence)],
+            ['node', 'src/backend/js/ollama_cli.mjs', json.dumps(sequence)],
             capture_output=True,
             text=True,
             env=env,

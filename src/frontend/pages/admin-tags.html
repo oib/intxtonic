@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>inTXTonic • Admin Tags</title>
+  <link rel="stylesheet" href="/src/frontend/css/base.css">
+  <link rel="stylesheet" href="/src/frontend/css/components.css">
+  <link rel="stylesheet" href="/src/frontend/css/layout.css">
+</head>
+<body>
+  <header class="site">
+    <div class="inner container nav-3">
+      <div class="left flex ai-c" style="gap:8px">
+        <a class="btn btn--subtle" href="/admin">← Back to admin</a>
+      </div>
+      <nav class="flex ai-c" style="gap:8px">
+        <a class="btn btn--subtle" href="/dashboard">Dashboard</a>
+        <a id="login-link" class="btn btn--subtle" href="/login">Login</a>
+        <button id="logout-btn" class="btn btn--ghost" style="display:none">Logout</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="row">
+      <div class="col-12">
+        <div class="card">
+          <h1>Tag Overview</h1>
+          <p class="hint" style="color:var(--tx-1)">Admins can review tag groups created by staff vs community members.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="row">
+      <div class="col-12">
+        <div class="card">
+          <div class="flex ai-c jc-b" style="gap:12px; flex-wrap:wrap">
+            <h2 style="margin:0">Admin-created tags</h2>
+            <button id="refresh-btn" class="btn btn--subtle" type="button">Refresh</button>
+          </div>
+          <div id="admin-tags" class="tags-list" style="margin-top:12px"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="row">
+      <div class="col-12">
+        <div class="card">
+          <h2 style="margin:0 0 12px">User-created tags</h2>
+          <div id="user-tags" class="tags-list"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site">
+    <div class="inner container flex ai-c jc-b">
+      <div><span id="year"></span> inTXTonic</div>
+    </div>
+  </footer>
+
+  <script type="module">
+    import { authHeaders, getToken, clearToken, refreshAuthUI } from '/src/frontend/js/auth.js';
+    import { showToast } from '/src/frontend/js/toast.js';
+
+    window.addEventListener('load', () => {
+      window.requestAnimationFrame(() => {
+        const logoutBtn = document.getElementById('logout-btn');
+        const yearEl = document.getElementById('year');
+        const adminTagsEl = document.getElementById('admin-tags');
+        const userTagsEl = document.getElementById('user-tags');
+        const refreshBtn = document.getElementById('refresh-btn');
+
+        if (yearEl) {
+          yearEl.textContent = new Date().getFullYear().toString();
+        }
+
+        const TAG_TEMPLATE = (tag) => `
+          <div class="flex ai-c jc-b" style="padding:8px 0; border-bottom:1px solid rgba(185,236,255,.12)">
+            <div class="flex ai-c" style="gap:8px; flex-wrap:wrap">
+              <span class="badge">#${tag.slug}</span>
+              <span>${tag.label || ''}</span>
+              ${tag.is_banned ? '<span class="badge badge--err">banned</span>' : ''}
+              ${tag.is_restricted ? '<span class="badge badge--warn">restricted</span>' : ''}
+            </div>
+            <div class="flex fd-c" style="gap:4px; text-align:right">
+              ${tag.created_at ? `<span class="hint">${new Date(tag.created_at).toLocaleString()}</span>` : ''}
+            </div>
+          </div>
+        `;
+
+        function renderTagList(el, tags, emptyMsg) {
+          if (!tags || !tags.length) {
+            el.innerHTML = `<div class="badge">${emptyMsg}</div>`;
+            return;
+          }
+          el.innerHTML = tags.map(TAG_TEMPLATE).join('');
+        }
+
+        async function fetchTagGroups() {
+          adminTagsEl.innerHTML = '<div class="badge">Loading…</div>';
+          userTagsEl.innerHTML = '<div class="badge">Loading…</div>';
+          try {
+            const res = await fetch('/tags/admin/groups', { headers: { ...authHeaders() } });
+            if (res.status === 401 || res.status === 403) {
+              showToast('Admin access required', 'err');
+              window.location.href = '/admin';
+              return;
+            }
+            if (!res.ok) {
+              throw new Error(await res.text());
+            }
+            const data = await res.json();
+            renderTagList(adminTagsEl, data?.admin_created || [], 'No admin-created tags');
+            renderTagList(userTagsEl, data?.user_created || [], 'No user-created tags');
+          } catch (err) {
+            console.error('Failed to load tag groups', err);
+            adminTagsEl.innerHTML = '<div class="badge badge--err">Failed to load tags</div>';
+            userTagsEl.innerHTML = '<div class="badge badge--err">Failed to load tags</div>';
+          }
+        }
+
+        async function ensureAdmin() {
+          if (!getToken()) {
+            window.location.href = '/login';
+            return false;
+          }
+          try {
+            const res = await fetch('/auth/me', { headers: { ...authHeaders() } });
+            if (!res.ok) {
+              window.location.href = '/login';
+              return false;
+            }
+            const me = await res.json();
+            const isAdmin = !!me.is_admin || (Array.isArray(me.roles) && me.roles.includes('moderator'));
+            if (!isAdmin) {
+              showToast('Admin access required', 'err');
+              window.location.href = '/admin';
+              return false;
+            }
+            return true;
+          } catch (err) {
+            console.error('Failed to verify admin', err);
+            showToast('Unable to verify access', 'err');
+            window.location.href = '/admin';
+            return false;
+          }
+        }
+
+        if (logoutBtn) {
+          logoutBtn.addEventListener('click', async () => {
+            try {
+              await fetch('/auth/logout', { method: 'POST', headers: { ...authHeaders() } });
+            } catch (err) {}
+            clearToken();
+            showToast('Signed out', 'ok');
+            window.location.href = '/';
+          });
+        }
+
+        if (refreshBtn) {
+          refreshBtn.addEventListener('click', () => { fetchTagGroups(); });
+        }
+
+        refreshAuthUI();
+        ensureAdmin().then((ok) => {
+          if (ok) {
+            fetchTagGroups();
+          }
+        });
+      });
+    });
+  </script>
+</body>
+</html>

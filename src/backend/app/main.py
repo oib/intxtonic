@@ -99,7 +99,7 @@ def _project_root_from_here() -> Path:
 
 _PROJECT_ROOT = _project_root_from_here()
 # Serve uploaded files from absolute path to align with upload saver
-app.mount("/uploads", StaticFiles(directory=str(_PROJECT_ROOT / "uploads")), name="uploads")
+app.mount("/uploads", StaticFiles(directory=str(_PROJECT_ROOT / "src" / "frontend" / "uploads")), name="uploads")
 
 _FEATURE_PAGES = {
     "translation-engine": "src/frontend/pages/features/translation-engine.html",
@@ -209,6 +209,11 @@ def admin_page():
 @app.get("/admin/users")
 def admin_users_page():
     return FileResponse("src/frontend/pages/admin-users.html")
+
+
+@app.get("/admin/tags")
+def admin_tags_page():
+    return FileResponse("src/frontend/pages/admin-tags.html")
 
 
 @app.get("/create")

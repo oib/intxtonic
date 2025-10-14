@@ -152,7 +152,8 @@ CREATE TABLE IF NOT EXISTS app.tags (
   slug        citext UNIQUE NOT NULL,
   label       text NOT NULL,
   created_at  timestamptz NOT NULL DEFAULT now(),
-  is_banned   boolean NOT NULL DEFAULT false
+  is_banned   boolean NOT NULL DEFAULT false,
+  created_by_admin boolean NOT NULL DEFAULT false
 );
 CREATE INDEX IF NOT EXISTS tags_slug_idx ON app.tags (slug);
 

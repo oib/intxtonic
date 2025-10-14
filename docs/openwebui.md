@@ -24,11 +24,11 @@ OpenWebUI serves as an AI integration layer in SoulTribe.chat, primarily used fo
   - **Behavior**: Loads the current user's astrological data (`Radix.json`), builds a prompt including user information and chat history, calls the Node CLI, and returns the AI response.
 
 #### 2.2 Node.js Wrappers
-- `dev/ollama.js`: An OpenAI-compatible Chat Completions client for Node.js that reads environment variables:
+- `src/backend/js/ollama.js`: An OpenAI-compatible Chat Completions client for Node.js that reads environment variables:
   - `OLLAMA_BASE` or `OPENWEBUI_BASE_URL`: Base URL of the API (e.g., http://127.0.0.1:11434 or your OpenWebUI proxy).
   - `OLLAMA_API_KEY` or `OPENWEBUI_API_KEY`: API key if required by your gateway.
   - `OLLAMA_MODEL` or `OPENWEBUI_MODEL`: Default model name (e.g., `gemma2:9b`).
-- `dev/ollama_cli.mjs`: A small Node CLI that imports `dev/ollama.js` and performs a single chat completion from a provided sequence of strings. The backend uses this via `subprocess.run()`.
+- `src/backend/js/ollama_cli.mjs` is a thin wrapper around `src/backend/js/ollama.js`. It expects a JSON array of strings, runs the chat completion, and prints the reply.
 
 #### 2.3 Batch Processing for Pairwise Evaluations
 - **Script**: `batch_pair_eval.py` (located in `/root/scripts/soultribe/`)

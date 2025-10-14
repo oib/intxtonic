@@ -54,6 +54,7 @@ class TagOut(BaseModel):
     is_banned: bool = False
     is_restricted: bool = False
     created_at: str
+    created_by_admin: bool = False
 
 
 class TagWithCountOut(BaseModel):
@@ -63,6 +64,7 @@ class TagWithCountOut(BaseModel):
     usage_count: int
     is_banned: bool
     is_restricted: bool
+    created_by_admin: bool = False
 
 
 class TagVisibilityRole(BaseModel):
@@ -100,6 +102,11 @@ class TagVisibilityAssignIn(BaseModel):
     handle: str
 
 
+class TagGroupOut(BaseModel):
+    admin_created: list[TagOut]
+    user_created: list[TagOut]
+
+
 @router.get("", response_model=list[TagOut])
 async def list_tags(
     request: Request,
@@ -113,7 +120,7 @@ async def list_tags(
     visibility_enabled = await tag_visibility_available(pool)
 
     sql = """
-      SELECT t.id, t.slug, t.label, t.is_banned, t.is_restricted, t.created_at
+      SELECT t.id, t.slug, t.label, t.is_banned, t.is_restricted, t.created_at, t.created_by_admin
       FROM app.tags t
     """
     params: list[object] = []
@@ -154,6 +161,7 @@ async def list_tags(
             "is_banned": r[3],
             "is_restricted": r[4],
             "created_at": r[5].isoformat() if r[5] else None,
+            "created_by_admin": bool(r[6]) if len(r) > 6 else False,
         }
         for r in rows
     ]
@@ -163,6 +171,49 @@ async def list_tags(
         except Exception:
             pass
     return payload
+
+
+@router.get("/admin/groups", response_model=TagGroupOut)
+async def list_admin_tag_groups(
+    pool = Depends(get_pool),
+    _: None = Depends(require_admin),
+):
+    language_slugs = [slug.lower() for slug in LANGUAGE_TAG_SLUGS]
+    async with pool.connection() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                """
+                SELECT t.id, t.slug, t.label, t.is_banned, t.is_restricted, t.created_at, t.created_by_admin
+                FROM app.tags t
+                WHERE NOT (LOWER(t.slug) = ANY(%s))
+                  AND NOT EXISTS (
+                    SELECT 1 FROM app.accounts a
+                    WHERE LOWER(a.handle) = LOWER(t.slug)
+                  )
+                ORDER BY t.label ASC
+                """,
+                (language_slugs,),
+            )
+            rows = await cur.fetchall()
+
+    admin_created: list[TagOut] = []
+    user_created: list[TagOut] = []
+    for row in rows:
+        data = TagOut(
+            id=str(row[0]),
+            slug=row[1],
+            label=row[2],
+            is_banned=bool(row[3]),
+            is_restricted=bool(row[4]),
+            created_at=row[5].isoformat() if row[5] else None,
+            created_by_admin=bool(row[6]),
+        )
+        if data.created_by_admin:
+            admin_created.append(data)
+        else:
+            user_created.append(data)
+
+    return TagGroupOut(admin_created=admin_created, user_created=user_created)
 
 
 @router.get("/list-top", response_model=list[TagWithCountOut])
@@ -187,7 +238,7 @@ async def list_top_tags(
             cache_key = None
 
     sql = """
-      SELECT t.id, t.slug, t.label, t.is_banned, t.is_restricted, COALESCE(p.cnt, 0) AS usage_count
+      SELECT t.id, t.slug, t.label, t.is_banned, t.is_restricted, COALESCE(p.cnt, 0) AS usage_count, t.created_by_admin
       FROM app.tags t
       LEFT JOIN (
         SELECT tag_id, COUNT(*) AS cnt
@@ -221,6 +272,7 @@ async def list_top_tags(
             "is_banned": bool(r[3]),
             "is_restricted": bool(r[4]),
             "usage_count": int(r[5] or 0),
+            "created_by_admin": bool(r[6]) if len(r) > 6 else False,
         }
         for r in rows
     ]
@@ -258,17 +310,17 @@ async def create_tag(
         async with conn.cursor() as cur:
             await cur.execute(
                 """
-                INSERT INTO app.tags (id, slug, label, is_restricted)
-                VALUES (gen_random_uuid(), %s, %s, %s)
+                INSERT INTO app.tags (id, slug, label, is_restricted, created_by_admin)
+                VALUES (gen_random_uuid(), %s, %s, %s, true)
                 ON CONFLICT (slug) DO NOTHING
-                RETURNING id, slug, label, is_banned, is_restricted, created_at
+                RETURNING id, slug, label, is_banned, is_restricted, created_at, created_by_admin
                 """,
                 (slug, label, is_restricted),
             )
             row = await cur.fetchone()
             if not row:
                 await cur.execute(
-                    "SELECT id, slug, label, is_banned, is_restricted, created_at FROM app.tags WHERE slug=%s",
+                    "SELECT id, slug, label, is_banned, is_restricted, created_at, created_by_admin FROM app.tags WHERE slug=%s",
                     (slug,),
                 )
                 row = await cur.fetchone()
@@ -280,6 +332,7 @@ async def create_tag(
                 "is_banned": row[3],
                 "is_restricted": row[4],
                 "created_at": row[5].isoformat() if row[5] else None,
+                "created_by_admin": bool(row[6]) if len(row) > 6 else True,
             }
 
 
@@ -298,7 +351,7 @@ async def unrestrict_tag(
                 UPDATE app.tags
                 SET is_restricted = false
                 WHERE id = %s
-                RETURNING id, slug, label, is_banned, is_restricted, created_at
+                RETURNING id, slug, label, is_banned, is_restricted, created_at, created_by_admin
                 """,
                 (tag_id,),
             )
@@ -313,6 +366,7 @@ async def unrestrict_tag(
         "is_banned": row[3],
         "is_restricted": row[4],
         "created_at": row[5].isoformat() if row[5] else None,
+        "created_by_admin": bool(row[6]) if len(row) > 6 else False,
     }
 
 

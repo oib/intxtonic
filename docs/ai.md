@@ -5,11 +5,11 @@ This document explains how the backend talks to an OpenAI-compatible API (e.g., 
 ## Components
 
 - Backend wrappers
-  - `dev/ollama.js` — OpenAI-compatible Chat Completions client (Node). Reads `.env`:
+  - `src/backend/js/ollama.js` — OpenAI-compatible Chat Completions client (Node). Reads `.env`:
     - `OLLAMA_BASE` — Base URL of the API (e.g., http://127.0.0.1:11434 or your OpenWebUI proxy)
     - `OLLAMA_API_KEY` — API key if required by your gateway
     - `OLLAMA_MODEL` — Default model name
-  - `dev/ollama_cli.mjs` — Small Node CLI that imports `dev/ollama.js` and performs a single chat completion from a provided sequence of strings. The backend uses this via `subprocess.run()`.
+  - `src/backend/js/ollama_cli.mjs` — Small Node CLI that imports `src/backend/js/ollama.js` and performs a single chat completion from a provided sequence of strings. The backend uses this via `subprocess.run()`.
 
 - Backend endpoints
   - `POST /api/match/annotate` (in `routes/match.py`)
@@ -40,7 +40,7 @@ CLI output is treated as the final reply. The backend may apply post-processing 
 
 ## Environment
 
-- `.env` variables used by `dev/ollama.js`:
+- `.env` variables used by `src/backend/js/ollama.js`:
   - `OLLAMA_BASE` — Base URL for the OpenAI-compatible endpoint.
   - `OLLAMA_API_KEY` — API key if your gateway requires one.
   - `OLLAMA_MODEL` — Default model, e.g. `llama3`, `qwen2`, etc.
@@ -49,7 +49,7 @@ Make sure your backend service environment inherits these variables so the Node 
 
 ## Requirements
 
-- Node.js available on the system PATH (the backend calls `node dev/ollama_cli.mjs ...`).
+- Node.js available on the system PATH (the backend calls `node src/backend/js/ollama_cli.mjs ...`).
 - The OpenAI-compatible API should accept Chat Completions requests. OpenWebUI can proxy to Ollama in OpenAI-compatible mode.
 
 ## Example Requests

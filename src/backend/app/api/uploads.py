@@ -28,7 +28,7 @@ def _project_root_from_here() -> Path:
         return here.parent
 
 PROJECT_ROOT = _project_root_from_here()
-BASE_DIR = (PROJECT_ROOT / "uploads").resolve()
+BASE_DIR = (PROJECT_ROOT / "src" / "frontend" / "uploads").resolve()
 BASE_DIR.mkdir(parents=True, exist_ok=True)
 
 ALLOWED_MIME = {

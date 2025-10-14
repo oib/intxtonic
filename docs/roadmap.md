@@ -5,7 +5,7 @@
 ## 🚀 Phase 1 · Immediate Focus
 - **Frontend**: Admin moderation page polish (resolve actions, tag management create/ban/unban) [in progress]
 - **Frontend**: Admin user list enhancements (search, pagination, disable/enable, email visibility)
-- **Admin Tools**: Confirm UI parity with restricted tag assignments (roles, bulk ops, audit logs)
+- **Admin Tools**: Extend tag governance docs with `created_by_admin` provenance and dashboard flows
 
 ## ⏭️ Phase 2 · Next Up
 - **Docs**: Finalize `layout.md` for 960px grid and mobile design
@@ -29,6 +29,7 @@
 - Tag filtering UX on dashboard with deep links (`?tags=`), removable chips, ESC clear, and persistence
 - Posts search (`q`) combined with tag filters, per-page limit, total count, and Load more UX
 - Admin tag controls on post page for slug-based attach/detach with public tag chips deep-linking to dashboard
+- Admin tags overview page at `/admin/tags` showing staff-created vs user-created groups and refresh controls
 - Admin user management overview with handle/email/status, disable/enable actions, and tag assignment workflows (`admin-users.html`)
 - i18n Admin page enhancements with batch/per-key translation, debug panel, and dynamic UI updates
 - Navbar layout standardization (centered brand, edge-aligned controls) using a 3-column grid
@@ -47,6 +48,7 @@
 - Admin user endpoints for listing accounts and toggling disabled state (`GET /users/admin`, `POST /users/admin/{id}/disable`, `POST /users/admin/{id}/enable`)
 - Rate limits on posting and replying with standardized JSON error handlers
 - Backend AI translation improvements: prompt hardening, retries, syntax fixes
+- Tag creation flow now records provenance via `created_by_admin` for admin vs community tags and exposes grouped admin API `GET /tags/admin/groups`
 - Resolved notify module imports and exposed `/user/settings`
 - Upgraded `/posts` search to PostgreSQL full-text ranking with snippets
 - Redis caching helpers for tag APIs and documented deployment requirements
@@ -59,8 +61,8 @@
 - Pytest with httpx ASGI coverage of health, auth/posts, tags/replies, permissions (403), rate limits (429), and post filtering
 - GitHub Actions workflow with Postgres service, schema + seeds apply, and test execution
 ### ⚙️ Deployment & Development Tooling
-- User-level systemd unit template `templates/langsum-gunicorn.user.service`
-- Dev runner script `scripts/dev_run.sh`
+- User-level systemd unit template `dev/templates/langsum-gunicorn.user.service`
+- Dev runner script `dev/scripts/dev_run.sh`
 - Makefile targets for venv, install, schema apply, seeds, dev, test, ci
 - README covering setup and tag filtering/management workflows
 

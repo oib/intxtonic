@@ -25,6 +25,7 @@
       </div>
       <nav class="flex ai-c" style="gap:8px">
         <a id="user-access-link" class="btn btn--subtle" href="/admin/users" style="display:none">User access</a>
+        <a id="tags-link" class="btn btn--subtle" href="/admin/tags" style="display:none">Tags</a>
         <a class="btn btn--subtle" href="/dashboard" data-i18n="nav.dashboard">Dashboard</a>
         <a id="login-link" class="btn btn--subtle" href="/login" data-i18n="nav.login">Login</a>
         <button id="logout-btn" class="btn btn--ghost" style="display:none" data-i18n="nav.logout">Logout</button>
@@ -454,6 +455,8 @@
         if (i18nLink) i18nLink.style.display = 'inline-flex';
         const userAccessLink = document.getElementById('user-access-link');
         if (userAccessLink) userAccessLink.style.display = 'inline-flex';
+        const tagsLink = document.getElementById('tags-link');
+        if (tagsLink) tagsLink.style.display = 'inline-flex';
         return true;
       } catch (err) {
         showToast(t('toast.verify_failed'), 'err');

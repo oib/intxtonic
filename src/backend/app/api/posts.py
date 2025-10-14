@@ -369,97 +369,6 @@ async def create_post(body: PostCreateIn, account_id: str = Depends(get_current_
                 (account_id, title, text, body.lang if body.lang else "en", body.visibility),
             )
             new_id = (await cur.fetchone())[0]
-            # Auto-attach language tag based on user's locale (e.g., 'en', 'de')
-            try:
-                await cur.execute("SELECT locale, handle FROM app.accounts WHERE id=%s", (account_id,))
-                row_loc = await cur.fetchone()
-                locale = (row_loc[0] or '').strip() if row_loc else ''
-                author_handle = (row_loc[1] or '').strip() if row_loc else ''
-                lang_slug = ''
-                if locale:
-                    # Take primary language code before '-' and lowercase
-                    lang_slug = locale.split('-')[0].split('_')[0].lower()
-                    # Limit to EU languages we support
-                    eu_langs = {
-                        'bg','hr','cs','da','nl','en','et','fi','fr','de','el','hu','ga','it','lv','lt','mt','pl','pt','ro','sk','sl','es','sv'
-                    }
-                    if lang_slug not in eu_langs:
-                        lang_slug = ''
-                if lang_slug:
-                    # Ensure tag exists (create if missing)
-                    await cur.execute("SELECT id FROM app.tags WHERE slug=%s LIMIT 1", (lang_slug,))
-                    r = await cur.fetchone()
-                    if r:
-                        tag_id = r[0]
-                    else:
-                        # Minimal label = uppercased slug (e.g., EN)
-                        label = lang_slug.upper()
-                        await cur.execute(
-                            """
-                            INSERT INTO app.tags (id, slug, label)
-                            VALUES (gen_random_uuid(), %s, %s)
-                            ON CONFLICT (slug) DO NOTHING
-                            RETURNING id
-                            """,
-                            (lang_slug, label),
-                        )
-                        r2 = await cur.fetchone()
-                        if r2:
-                            tag_id = r2[0]
-                        else:
-                            await cur.execute("SELECT id FROM app.tags WHERE slug=%s LIMIT 1", (lang_slug,))
-                            tag_id = (await cur.fetchone())[0]
-                    # Attach the language tag to the post (ignore if already attached)
-                    await cur.execute(
-                        """
-                        INSERT INTO app.post_tags (post_id, tag_id)
-                        VALUES (%s, %s)
-                        ON CONFLICT DO NOTHING
-                        """,
-                        (new_id, tag_id),
-                    )
-
-                # Also auto-tag with the author's handle as a slug (e.g., user1)
-                handle_slug = ''
-                if author_handle:
-                    s = author_handle.lower()
-                    # sanitize into slug: alnum and -_. ; spaces -> '-'
-                    handle_slug = ''.join(ch if (ch.isalnum() or ch in '-_.') else ('-' if ch.isspace() else '-') for ch in s).strip('-')
-                    if not handle_slug:
-                        handle_slug = ''
-                if handle_slug:
-                    await cur.execute("SELECT id FROM app.tags WHERE slug=%s LIMIT 1", (handle_slug,))
-                    r = await cur.fetchone()
-                    if r:
-                        handle_tag_id = r[0]
-                    else:
-                        label = author_handle
-                        await cur.execute(
-                            """
-                            INSERT INTO app.tags (id, slug, label)
-                            VALUES (gen_random_uuid(), %s, %s)
-                            ON CONFLICT (slug) DO NOTHING
-                            RETURNING id
-                            """,
-                            (handle_slug, label),
-                        )
-                        r2 = await cur.fetchone()
-                        if r2:
-                            handle_tag_id = r2[0]
-                        else:
-                            await cur.execute("SELECT id FROM app.tags WHERE slug=%s LIMIT 1", (handle_slug,))
-                            handle_tag_id = (await cur.fetchone())[0]
-                    await cur.execute(
-                        """
-                        INSERT INTO app.post_tags (post_id, tag_id)
-                        VALUES (%s, %s)
-                        ON CONFLICT DO NOTHING
-                        """,
-                        (new_id, handle_tag_id),
-                    )
-            except Exception:
-                # Non-fatal: if tagging fails, continue without blocking post creation
-                pass
             # Bump posts_count
             await cur.execute(
                 """
@@ -758,8 +667,8 @@ async def attach_tag(
                     label = slug.replace('-', ' ').replace('_', ' ').replace('.', ' ').title() or slug
                 await cur.execute(
                     """
-                    INSERT INTO app.tags (id, slug, label, is_restricted)
-                    VALUES (gen_random_uuid(), %s, %s, false)
+                    INSERT INTO app.tags (id, slug, label, is_restricted, created_by_admin)
+                    VALUES (gen_random_uuid(), %s, %s, false, false)
                     ON CONFLICT (slug) DO NOTHING
                     RETURNING id, is_banned
                     """,
