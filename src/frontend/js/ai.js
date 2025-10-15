@@ -107,7 +107,13 @@ export function bindPostPageAIActions(postId) {
       lastTranslation = result?.translated_text || null;
       translateBtn.disabled = false;
       if (result && result.translated_text && bodyEl) {
-        bodyEl.innerHTML += `<br><strong>Translated:</strong> ${result.translated_text}`;
+        const withBreaks = result.translated_text
+          .replace(/\r\n/g, '\n')
+          .split('\n')
+          .map(line => line.trim().length ? line : '')
+          .map(line => line ? line : '<br>')
+          .join('<br>');
+        bodyEl.innerHTML += `<br><strong>Translated:</strong><br>${withBreaks}`;
       }
     });
   }
@@ -118,7 +124,7 @@ export function bindPostPageAIActions(postId) {
       const result = await summarizePost(postId, lastTranslation ? { source_text: lastTranslation } : {});
       summarizeBtn.disabled = false;
       if (result && result.summary && bodyEl) {
-        bodyEl.innerHTML += `<br><strong>Summary:</strong> ${result.summary}`;
+        bodyEl.innerHTML += `<br><br><strong>Summary:</strong> ${result.summary}`;
       }
     });
   }

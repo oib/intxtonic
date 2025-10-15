@@ -232,6 +232,7 @@
         b.innerHTML = renderMarkdownSafe(p.body_md || '');
         const scoreEl = document.getElementById('post-score');
         if(scoreEl) scoreEl.textContent = String(p.score ?? 0);
+        window.__currentPostAuthorId = p.author_id || null;
       }catch(err){ showToast('Failed to load post','err'); }
     }
 
@@ -507,7 +508,7 @@
         const disable = count >= 7;
         inp.disabled = disable;
         btn.disabled = disable;
-        hint.textContent = disable ? 'This post already has 7 tags (maximum).' : 'Up to 7 tags per post.';
+        hint.textContent = disable ? 'This post already has 7 tags (maximum).' : 'Up to 7 tags per post. Use the field to search existing tags; if it doesn\'t exist and you are admin, it will be created automatically.';
         // detach handlers
         wrap.querySelectorAll('button[data-remove]').forEach(btn => {
           btn.addEventListener('click', async () => {
@@ -532,11 +533,18 @@
     }
 
     async function setupAdminTools(){
-      // show tag panel for any logged-in user (attach/detach allowed server-side)
+      // show tag panel only for post owner
       try{
-        const r = await fetch('/auth/me', { headers:{ ...authHeaders() }});
-        if(!r.ok) return; // not logged in
+        const meRes = await fetch('/auth/me', { headers:{ ...authHeaders() }});
+        if(!meRes.ok) return;
+        const me = await meRes.json();
+
+        const isOwner = me?.id && window.__currentPostAuthorId && me.id === window.__currentPostAuthorId;
         const panel = document.getElementById('tag-admin');
+        if(!isOwner){
+          panel.style.display = 'none';
+          return;
+        }
         panel.style.display = 'grid';
         await loadPostTags();
         const btn = document.getElementById('btn-attach');

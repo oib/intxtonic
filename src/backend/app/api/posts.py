@@ -33,6 +33,7 @@ class PostOut(BaseModel):
     score: int
     reply_count: int
     created_at: Optional[str] = None
+    author_id: Optional[str] = None
     author: Optional[str] = None
     tags: List[PostTagOut] = []
     highlight: Optional[str] = None
@@ -141,7 +142,7 @@ async def list_posts(
         if tag:
             sql = f"""
               SELECT p.id, p.title, p.body_md, p.lang, p.visibility, p.score, p.reply_count,
-                     p.created_at, a.handle AS author,
+                     p.created_at, p.author_id, a.handle AS author,
                      COALESCE(
                        json_agg(DISTINCT jsonb_build_object('id', t.id, 'slug', t.slug, 'label', t.label))
                        FILTER (WHERE t.id IS NOT NULL), '[]') AS tags,
@@ -154,7 +155,7 @@ async def list_posts(
               WHERE p.deleted_at IS NULL AND t.slug = ANY(%s::text[])
               {search_condition}
               {cursor_condition}
-              GROUP BY p.id, p.title, p.body_md, p.lang, p.visibility, p.score, p.reply_count, p.created_at, a.handle
+              GROUP BY p.id, p.title, p.body_md, p.lang, p.visibility, p.score, p.reply_count, p.created_at, p.author_id, a.handle
               HAVING COUNT(DISTINCT t.slug) = %s
               ORDER BY {order_clause}
               LIMIT %s OFFSET %s
@@ -655,8 +656,7 @@ async def attach_tag(
                 raise HTTPException(status_code=404, detail="post not found")
             owner_id = str(owner_row[0]) if owner_row[0] is not None else None
             is_owner = owner_id and owner_id == account_id
-            admin = await is_admin_account(pool, account_id)
-            if not (is_owner or admin):
+            if not is_owner:
                 raise HTTPException(status_code=403, detail="only the author can modify tags")
             # find tag and ensure not banned
             await cur.execute("SELECT id, is_banned FROM app.tags WHERE slug=%s", (slug,))
@@ -703,12 +703,23 @@ async def attach_tag(
 async def detach_tag(
     post_id: str,
     tag_id: str,
-    _: str = Depends(get_current_account_id),  # any logged-in user
+    account_id: str = Depends(get_current_account_id),
     pool = Depends(get_pool),
     csrf: bool = Depends(csrf_validate),
 ):
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
+            await cur.execute(
+                "SELECT author_id FROM app.posts WHERE id=%s AND deleted_at IS NULL",
+                (post_id,),
+            )
+            owner_row = await cur.fetchone()
+            if not owner_row:
+                raise HTTPException(status_code=404, detail="post not found")
+            owner_id = str(owner_row[0]) if owner_row[0] is not None else None
+            is_owner = owner_id and owner_id == account_id
+            if not is_owner:
+                raise HTTPException(status_code=403, detail="only the author can modify tags")
             await cur.execute("DELETE FROM app.post_tags WHERE post_id=%s AND tag_id=%s", (post_id, tag_id))
     return {"ok": True}
 
@@ -717,7 +728,7 @@ async def detach_tag(
 async def get_post(post_id: str, account_id: str = Depends(get_current_account_id), pool = Depends(get_pool)):
     sql = """
       SELECT p.id, p.title, p.body_md, p.lang, p.visibility, p.score, p.reply_count,
-             p.created_at, a.handle AS author
+             p.created_at, p.author_id, a.handle AS author
       FROM app.posts p
       LEFT JOIN app.accounts a ON a.id = p.author_id
       WHERE p.id = %s AND p.deleted_at IS NULL
@@ -738,7 +749,8 @@ async def get_post(post_id: str, account_id: str = Depends(get_current_account_i
         "score": row[5],
         "reply_count": row[6],
         "created_at": row[7].isoformat() if row[7] else None,
-        "author": row[8],
+        "author_id": str(row[8]) if row[8] else None,
+        "author": row[9],
     }
 
 

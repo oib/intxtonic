@@ -216,6 +216,11 @@ def admin_tags_page():
     return FileResponse("src/frontend/pages/admin-tags.html")
 
 
+@app.get("/admin/moderation")
+def admin_moderation_page():
+    return FileResponse("src/frontend/pages/admin-moderation.html")
+
+
 @app.get("/create")
 def create_post_page():
     return FileResponse("src/frontend/pages/create.html")

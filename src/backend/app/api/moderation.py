@@ -5,7 +5,10 @@ from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from ..core.db import get_pool
-from ..core.deps import require_role, get_current_account_id
+from ..core.deps import (
+    require_admin_or_moderator,
+    get_current_account_id,
+)
 from ..core.notify import publish
 from .auth import csrf_validate
 
@@ -49,7 +52,7 @@ async def list_reports(
     req: Request,
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    _: None = Depends(lambda request: require_role(request, "moderator")),  # Restrict to moderators or admins
+    _: None = Depends(require_admin_or_moderator),
 ):
     """Fetch a paginated list of reported content for moderation review."""
     pool = get_pool(req)
@@ -139,7 +142,7 @@ class ReportProcessOut(BaseModel):
 @router.post("/reports/{report_id}/resolve", response_model=ReportProcessOut)
 async def resolve_report(
     report_id: str,
-    _: None = Depends(lambda request: require_role(request, "moderator")),
+    _: None = Depends(require_admin_or_moderator),
     __: bool = Depends(csrf_validate),
     pool = Depends(get_pool),
 ):
@@ -167,10 +170,10 @@ async def list_new_content(
     req: Request,
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    _: None = Depends(lambda request: require_role(request, "moderator")),  # Restrict to moderators or admins
+    _: None = Depends(require_admin_or_moderator),
 ):
     """Fetch a paginated list of new posts and replies for moderation review."""
-    pool = get_pool(req.app)
+    pool = get_pool(req)
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
             # Get total count of new content (posts + replies)

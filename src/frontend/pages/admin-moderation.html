@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>inTXTonic • Admin Moderation</title>
+  <link rel="preload" href="/src/frontend/css/base.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="/src/frontend/css/base.css"></noscript>
+  <link rel="preload" href="/src/frontend/css/components.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="/src/frontend/css/components.css"></noscript>
+  <link rel="preload" href="/src/frontend/css/layout.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="/src/frontend/css/layout.css"></noscript>
+  <style>
+    h1 { font-size: 1.75rem; margin: 0 0 0.75rem; }
+    h2 { font-size: 1.25rem; margin: 0 0 0.5rem; }
+  </style>
+</head>
+<body>
+  <header class="site">
+    <div class="inner container nav-3">
+      <div class="left flex ai-c" style="gap:8px">
+        <a class="btn btn--subtle" href="/admin">← Back to admin</a>
+      </div>
+      <nav class="flex ai-c" style="gap:8px">
+        <a class="btn btn--subtle" href="/dashboard">Dashboard</a>
+        <a id="login-link" class="btn btn--subtle" href="/login">Login</a>
+        <button id="logout-btn" class="btn btn--ghost" style="display:none">Logout</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="row">
+      <div class="col-12">
+        <div class="card">
+          <h1>Moderation Queues</h1>
+          <p class="hint" style="color:var(--tx-1)">Admins and moderators can review incoming reports and new content.</p>
+          <div class="tabs" style="margin-top:12px">
+            <button id="tab-reports" class="tab active" data-tab="reports">Reports</button>
+            <button id="tab-new-content" class="tab" data-tab="new-content">New Content</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="row">
+      <div class="col-12">
+        <div class="card">
+          <div id="reports" class="queue-content" style="display:block;">
+            <h2>Reports</h2>
+            <p class="badge">UI stub for reported content. Click "Load more" to simulate fetching reports.</p>
+            <div id="reports-list"></div>
+            <div class="flex ai-c jc-b mt-4">
+              <div></div>
+              <button id="load-more-reports" class="btn btn--subtle" type="button">Load more</button>
+            </div>
+          </div>
+          <div id="new-content" class="queue-content" style="display:none;">
+            <h2>New Content</h2>
+            <p class="badge">UI stub for new posts and replies. Click "Load more" to simulate fetching new items.</p>
+            <div id="new-content-list"></div>
+            <div class="flex ai-c jc-b mt-4">
+              <div></div>
+              <button id="load-more-new-content" class="btn btn--subtle" type="button">Load more</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site">
+    <div class="inner container flex ai-c jc-b">
+      <div><span id="year"></span> inTXTonic</div>
+      <div class="hide-sm">Built with Windsurf guidelines</div>
+    </div>
+  </footer>
+
+  <script type="module">
+    import { authHeaders, getToken, clearToken } from '/src/frontend/js/auth.js';
+    import { showToast } from '/src/frontend/js/toast.js';
+
+    document.getElementById('year').textContent = new Date().getFullYear().toString();
+
+    const loginLink = document.getElementById('login-link');
+    const logoutBtn = document.getElementById('logout-btn');
+    function refreshAuthUI(){ const has = !!getToken(); loginLink.style.display = has?'none':'inline-flex'; logoutBtn.style.display = has?'inline-flex':'none'; }
+    logoutBtn.addEventListener('click', async () => {
+      try { await fetch('/auth/logout', { method: 'POST', headers: { ...authHeaders() } }); } catch {}
+      clearToken();
+      showToast('Signed out', 'ok');
+      window.location.href = '/';
+    });
+    refreshAuthUI();
+
+    const elTabReports = document.getElementById('tab-reports');
+    const elTabNewContent = document.getElementById('tab-new-content');
+    const elReports = document.getElementById('reports');
+    const elNewContent = document.getElementById('new-content');
+
+    const elReportsList = document.getElementById('reports-list');
+    const elNewContentList = document.getElementById('new-content-list');
+    const elReportsLoadBtn = document.getElementById('load-more-reports');
+    const elNewContentLoadBtn = document.getElementById('load-more-new-content');
+
+    let reportsState = { offset: 0, total: 0, loading: false };
+    let newContentState = { offset: 0, total: 0, loading: false };
+
+    function switchTab(tab) {
+      elTabReports.classList.toggle('active', tab === 'reports');
+      elTabNewContent.classList.toggle('active', tab === 'new-content');
+      elReports.style.display = tab === 'reports' ? 'block' : 'none';
+      elNewContent.style.display = tab === 'new-content' ? 'block' : 'none';
+      if (tab === 'reports' && reportsState.offset === 0 && !reportsState.loading) {
+        void loadReports(true);
+      }
+      if (tab === 'new-content' && newContentState.offset === 0 && !newContentState.loading) {
+        void loadNewContent(true);
+      }
+    }
+
+    elTabReports.addEventListener('click', () => switchTab('reports'));
+    elTabNewContent.addEventListener('click', () => switchTab('new-content'));
+
+    elReportsLoadBtn.addEventListener('click', () => { void loadReports(); });
+    elNewContentLoadBtn.addEventListener('click', () => { void loadNewContent(); });
+
+    function getReportTargetHref(report) {
+      const type = (report.target_type || '').toLowerCase();
+      if (type === 'reply') {
+        return `/post/${encodeURIComponent(report.target_id)}#reply-${encodeURIComponent(report.id)}`;
+      }
+      return `/post/${encodeURIComponent(report.target_id)}`;
+    }
+
+    function renderReportRow(report) {
+      const reason = report.reason ? ` • ${report.reason}` : '';
+      const reportedBy = report.reported_by ? ` • @${report.reported_by}` : '';
+      const created = report.created_at ? ` • ${new Date(report.created_at).toLocaleString()}` : '';
+      const href = getReportTargetHref(report);
+      return `
+        <div class="report-item flex ai-c jc-b" data-report-id="${report.id}" style="padding:8px 0; border-bottom:1px solid rgba(185,236,255,.12)">
+          <span class="badge">${report.target_type} ${report.target_id}${reason}${reportedBy}${created}</span>
+          <div class="flex ai-c" style="gap:8px">
+            <a class="btn btn--ghost" href="${href}" target="_blank" rel="noopener">View</a>
+            <button class="btn btn--subtle resolve-btn" data-report-id="${report.id}">Resolve</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderNewContentRow(item) {
+      const title = item.title ? `<strong>${item.title}</strong>` : '';
+      const author = item.author ? ` • @${item.author}` : '';
+      const created = item.created_at ? ` • ${new Date(item.created_at).toLocaleString()}` : '';
+      const summary = item.body_md ? item.body_md.slice(0, 180) : '';
+      return `
+        <div class="badge" data-content-id="${item.id}" style="display:flex; flex-direction:column; align-items:flex-start; gap:4px">
+          <span>#${item.type} ${item.id}${author}${created}</span>
+          ${title}
+          <span style="opacity:.8">${summary}</span>
+        </div>
+      `;
+    }
+
+    function bindResolveButtons(root) {
+      root.querySelectorAll('button.resolve-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const reportId = btn.getAttribute('data-report-id');
+          if (!reportId) return;
+          btn.disabled = true;
+          try {
+            const res = await fetch(`/moderation/reports/${encodeURIComponent(reportId)}/resolve`, {
+              method: 'POST',
+              headers: { ...authHeaders() },
+            });
+            if (!res.ok) throw new Error(await res.text());
+            showToast('Report resolved', 'ok');
+            const row = elReportsList.querySelector(`[data-report-id="${reportId}"]`);
+            row?.remove();
+          } catch (err) {
+            console.error('resolve failed', err);
+            showToast('Failed to resolve report', 'err');
+            btn.disabled = false;
+          }
+        });
+      });
+    }
+
+    function updateLoadButtonState(state, btn) {
+      if (state.loading) {
+        btn.disabled = true;
+        btn.textContent = 'Loading…';
+      } else {
+        const moreAvailable = state.offset < state.total;
+        btn.disabled = !moreAvailable;
+        btn.textContent = moreAvailable ? 'Load more' : 'No more';
+      }
+    }
+
+    async function loadReports(reset = false) {
+      if (reportsState.loading) return;
+      reportsState.loading = true;
+      if (reset) {
+        reportsState.offset = 0;
+        reportsState.total = 0;
+        elReportsList.innerHTML = '<div class="badge">Loading…</div>';
+      }
+      updateLoadButtonState(reportsState, elReportsLoadBtn);
+      try {
+        const res = await fetch(`/moderation/reports?limit=20&offset=${reportsState.offset}`, { headers: { ...authHeaders() } });
+        if (res.status === 401 || res.status === 403) {
+          showToast('Admin access required', 'err');
+          window.location.href = '/admin';
+          return;
+        }
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        reportsState.total = data.total;
+        reportsState.offset += data.items.length;
+        if (reset) {
+          elReportsList.innerHTML = '';
+        }
+        if (!data.items.length && reportsState.offset === 0) {
+          elReportsList.innerHTML = '<div class="badge">No reports</div>';
+        } else {
+          const frag = document.createElement('div');
+          frag.innerHTML = data.items.map(renderReportRow).join('');
+          bindResolveButtons(frag);
+          elReportsList.append(...frag.children);
+        }
+      } catch (err) {
+        console.error('loadReports failed', err);
+        elReportsList.innerHTML = '<div class="badge badge--err">Failed to load reports</div>';
+      } finally {
+        reportsState.loading = false;
+        updateLoadButtonState(reportsState, elReportsLoadBtn);
+      }
+    }
+
+    async function loadNewContent(reset = false) {
+      if (newContentState.loading) return;
+      newContentState.loading = true;
+      if (reset) {
+        newContentState.offset = 0;
+        newContentState.total = 0;
+        elNewContentList.innerHTML = '<div class="badge">Loading…</div>';
+      }
+      updateLoadButtonState(newContentState, elNewContentLoadBtn);
+      try {
+        const res = await fetch(`/moderation/new-content?limit=20&offset=${newContentState.offset}`, { headers: { ...authHeaders() } });
+        if (res.status === 401 || res.status === 403) {
+          showToast('Admin access required', 'err');
+          window.location.href = '/admin';
+          return;
+        }
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        newContentState.total = data.total;
+        newContentState.offset += data.items.length;
+        if (reset) {
+          elNewContentList.innerHTML = '';
+        }
+        if (!data.items.length && newContentState.offset === 0) {
+          elNewContentList.innerHTML = '<div class="badge">No new content</div>';
+        } else {
+          const frag = document.createElement('div');
+          frag.innerHTML = data.items.map(renderNewContentRow).join('');
+          elNewContentList.append(...frag.children);
+        }
+      } catch (err) {
+        console.error('loadNewContent failed', err);
+        elNewContentList.innerHTML = '<div class="badge badge--err">Failed to load new content</div>';
+      } finally {
+        newContentState.loading = false;
+        updateLoadButtonState(newContentState, elNewContentLoadBtn);
+      }
+    }
+
+    async function ensureModerator() {
+      if (!getToken()) {
+        window.location.href = '/login';
+        return false;
+      }
+      try {
+        const res = await fetch('/auth/me', { headers: { ...authHeaders() } });
+        if (!res.ok) {
+          window.location.href = '/login';
+          return false;
+        }
+        const user = await res.json();
+        const allowed = !!user.is_admin || (Array.isArray(user.roles) && user.roles.includes('moderator'));
+        if (!allowed) {
+          showToast('Admin access required', 'err');
+          window.location.href = '/admin';
+          return false;
+        }
+        loginLink.style.display = 'none';
+        logoutBtn.style.display = 'inline-flex';
+        return true;
+      } catch (err) {
+        showToast('Unable to verify access', 'err');
+        window.location.href = '/admin';
+        return false;
+      }
+    }
+
+    function setupSSE(){
+      try{
+        const es = new EventSource('/notify/events');
+        es.onmessage = (evt) => {
+          try{
+            const data = JSON.parse(evt.data || '{}');
+            if(data && data.type){
+              if(data.type === 'post_created'){
+                const wrap = document.getElementById('new-content-list');
+                const el = document.createElement('div');
+                el.className = 'badge';
+                el.textContent = `New post: ${data.title || data.id}`;
+                wrap.prepend(el);
+                showToast('New post created', 'info');
+              }else if(data.type === 'reply_created'){
+                const wrap = document.getElementById('new-content-list');
+                const el = document.createElement('div');
+                el.className = 'badge';
+                el.textContent = `New reply: ${data.id}`;
+                wrap.prepend(el);
+                showToast('New reply added', 'info');
+              }else if(data.type === 'report_queued'){
+                const wrap = document.getElementById('reports-list');
+                const el = document.createElement('div');
+                el.className = 'report-item flex ai-c jc-b';
+                el.innerHTML = `
+                  <span class="badge">Report queued: ${data.target_type} ${data.target_id}${data.reason ? ' • ' + data.reason : ''}</span>
+                  <button class="btn btn--subtle resolve-btn" data-report-id="${data.id}">Resolve</button>
+                `;
+                wrap.prepend(el);
+                showToast('New report queued', 'warn');
+                el.querySelector('.resolve-btn').addEventListener('click', async () => {
+                  try {
+                    const res = await fetch(`/moderation/reports/${data.id}/resolve`, {
+                      method: 'POST',
+                      headers: { ...authHeaders() },
+                    });
+                    if (!res.ok) throw new Error(await res.text());
+                    showToast('Report resolved', 'ok');
+                    el.remove();
+                  } catch (err) {
+                    showToast('Failed to resolve report', 'err');
+                  }
+                });
+              }else if(data.type === 'report_processed'){
+                document.querySelectorAll('.report-item').forEach(item => {
+                  if (item.querySelector(`[data-report-id="${data.id}"]`)) {
+                    item.remove();
+                  }
+                });
+                showToast('Report processed', 'ok');
+              }
+            }
+          }catch(e){ /* ignore parse errors */ }
+        };
+        es.onerror = () => {
+          try{ es.close(); }catch{}
+          setTimeout(setupSSE, 2500);
+        };
+      }catch(e){ /* ignore */ }
+    }
+
+    (async () => {
+      const ok = await ensureModerator();
+      if (ok) {
+        await Promise.all([
+          loadReports(true),
+          loadNewContent(true),
+        ]);
+        setupSSE();
+      }
+    })();
+  </script>
+</body>
+</html>

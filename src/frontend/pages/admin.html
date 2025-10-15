@@ -20,12 +20,8 @@
 <body>
   <header class="site">
     <div class="inner container nav-3">
-      <div class="left flex ai-c" style="gap:8px">
-        <a id="i18n-link" class="btn btn--subtle" href="/admin/i18n" style="display:none" data-i18n="admin.i18n">Translations</a>
-      </div>
+      <div class="left flex ai-c" style="gap:8px"></div>
       <nav class="flex ai-c" style="gap:8px">
-        <a id="user-access-link" class="btn btn--subtle" href="/admin/users" style="display:none">User access</a>
-        <a id="tags-link" class="btn btn--subtle" href="/admin/tags" style="display:none">Tags</a>
         <a class="btn btn--subtle" href="/dashboard" data-i18n="nav.dashboard">Dashboard</a>
         <a id="login-link" class="btn btn--subtle" href="/login" data-i18n="nav.login">Login</a>
         <button id="logout-btn" class="btn btn--ghost" style="display:none" data-i18n="nav.logout">Logout</button>
@@ -39,38 +35,17 @@
         <div class="card">
           <h1 data-i18n="admin.panel">Admin Panel</h1>
           <p style="color:var(--tx-1)" data-i18n="admin.panel_hint">Manage moderation queues and tags. Restricted to admin and moderator roles.</p>
+          <div class="flex ai-c" style="gap:8px; flex-wrap:wrap; margin-top:12px">
+            <a id="i18n-link" class="btn btn--subtle" href="/admin/i18n" style="display:none" data-i18n="admin.i18n">Translations</a>
+            <a id="moderation-link" class="btn btn--subtle" href="/admin/moderation" style="display:none">Moderation</a>
+            <a id="user-access-link" class="btn btn--subtle" href="/admin/users" style="display:none">User access</a>
+            <a id="tags-link" class="btn btn--subtle" href="/admin/tags" style="display:none">Tags</a>
+          </div>
         </div>
       </div>
     </section>
 
     <section class="row">
-      <div class="col-6">
-        <div class="card">
-          <h2 data-i18n="admin.moderation">Moderation Queues</h2>
-          <div class="tabs">
-            <button id="tab-reports" class="tab active" data-tab="reports" data-i18n="admin.reports">Reports</button>
-            <button id="tab-new-content" class="tab" data-tab="new-content" data-i18n="admin.new_content">New Content</button>
-          </div>
-          <div id="reports" class="queue-content" style="display:block;">
-            <h3 data-i18n="admin.reports">Reports</h3>
-            <p class="badge">UI stub for reported content. Click 'Load more' to simulate fetching reports.</p>
-            <div id="reports-list"></div>
-            <div class="flex ai-c jc-b mt-4">
-              <div></div>
-              <button id="load-more-reports" class="btn btn--subtle" data-i18n="admin.load_more">Load more</button>
-            </div>
-          </div>
-          <div id="new-content" class="queue-content" style="display:none;">
-            <h3 data-i18n="admin.new_content">New Content</h3>
-            <p class="badge">UI stub for new posts and replies. Click 'Load more' to simulate fetching new items.</p>
-            <div id="new-content-list"></div>
-            <div class="flex ai-c jc-b mt-4">
-              <div></div>
-              <button id="load-more-new-content" class="btn btn--subtle" data-i18n="admin.load_more">Load more</button>
-            </div>
-          </div>
-        </div>
-      </div>
       <div class="col-12">
         <div class="card">
           <h2 data-i18n="admin.tags" style="margin:0 0 12px">Tag Management</h2>
@@ -83,14 +58,6 @@
             <button id="btn-create-tag" class="btn" data-i18n="admin.create_tag">Create Tag</button>
           </div>
           <div id="tags-list" class="tags-list"></div>
-          <div class="card" style="margin-top:24px">
-            <h3>Tag Visibility</h3>
-            <div class="flex ai-c" style="gap:8px; margin-bottom:12px">
-              <input id="q-tag-visibility" class="input" placeholder="Filter tags" style="max-width:240px">
-              <button id="btn-search-visibility" class="btn btn--subtle">Filter</button>
-            </div>
-            <div id="tag-visibility" class="tags-list"></div>
-          </div>
         </div>
       </div>
     </section>
@@ -122,209 +89,11 @@
     });
     refreshAuthUI();
 
-    // Tab switching for moderation queues
-    const elTabReports = document.getElementById('tab-reports');
-    const elTabNewContent = document.getElementById('tab-new-content');
-    const elReports = document.getElementById('reports');
-    const elNewContent = document.getElementById('new-content');
-
-    function switchTab(tab) {
-      elTabReports.classList.toggle('active', tab === 'reports');
-      elTabNewContent.classList.toggle('active', tab === 'new-content');
-      elReports.style.display = tab === 'reports' ? 'block' : 'none';
-      elNewContent.style.display = tab === 'new-content' ? 'block' : 'none';
-      // Future: Load content for the selected tab if needed
-    }
-
-    function normalizeHandleInput(value = '') {
-      const trimmed = value.trim();
-      if (!trimmed) return '';
-      return trimmed.startsWith('@') ? trimmed.slice(1) : trimmed;
-    }
-
-    function setTagStatusMessage(tagId, message, tone = 'info') {
-      const statusEl = elTagVisibility.querySelector(`.tag-vis-status[data-tag-id="${tagId}"]`);
-      if (!statusEl) return;
-      statusEl.textContent = message;
-      const baseClass = 'tag-vis-status badge';
-      const toneClass = tone === 'err' ? ' badge--err' : tone === 'warn' ? ' badge--warn' : '';
-      statusEl.className = baseClass + toneClass;
-      statusEl.style.display = message ? 'inline-block' : 'none';
-    }
-
-    function clearTagStatusMessage(tagId) {
-      setTagStatusMessage(tagId, '');
-    }
-
-    function renderTagVisibility(rows){
-      const html = rows.map(t => {
-        const rolesHtml = t.roles.length
-          ? t.roles.map(r => `<span class="badge">${r.name}</span>`).join(' ')
-          : '<span class="badge">none</span>';
-        const usersHtml = t.users.length
-          ? t.users.map(u => `
-              <div class="flex ai-c" style="gap:6px">
-                <span class="badge">@${u.handle}</span>
-                <button type="button" class="btn btn--ghost tag-vis-remove-user" data-tag-id="${t.tag_id}" data-handle="${u.handle}">Remove</button>
-              </div>
-            `).join('')
-          : '<div class="badge">No user overrides</div>';
-        return `
-          <div class="tag-vis-row" data-tag-id="${t.tag_id}" data-tag-slug="${t.slug}" style="padding:12px 0; border-bottom:1px solid rgba(185,236,255,.12)">
-            <div class="flex ai-c jc-b" style="gap:16px; flex-wrap:wrap">
-              <div class="flex ai-c" style="gap:8px">
-                <span class="badge">#${t.slug}</span>
-                <span>${t.label || ''}</span>
-              </div>
-              <div class="flex ai-c" style="gap:8px; flex-wrap:wrap">
-                <strong>Roles</strong>
-                <div class="flex ai-c" style="gap:6px; flex-wrap:wrap">${rolesHtml}</div>
-              </div>
-            </div>
-            <div class="tag-vis-users" style="margin-top:12px">
-              <div><strong>Users</strong></div>
-              <div class="tag-vis-user-list" style="margin-top:6px; display:flex; flex-direction:column; gap:6px">
-                ${usersHtml}
-              </div>
-              <form class="tag-vis-add-user flex" data-tag-id="${t.tag_id}" style="gap:8px; flex-wrap:wrap; margin-top:12px">
-                <input name="handle" class="input" placeholder="Add @handle" autocomplete="off" style="max-width:220px">
-                <button class="btn btn--subtle" type="submit">Grant access</button>
-              </form>
-              <div class="tag-vis-status badge" data-tag-id="${t.tag_id}" style="display:none; margin-top:8px"></div>
-            </div>
-          </div>
-        `;
-      }).join('');
-      elTagVisibility.innerHTML = html || '<div class="badge">No visibility overrides</div>';
-
-      elTagVisibility.querySelectorAll('.tag-vis-add-user').forEach(form => {
-        form.addEventListener('submit', handleTagUserGrant);
-      });
-      elTagVisibility.querySelectorAll('.tag-vis-remove-user').forEach(btn => {
-        btn.addEventListener('click', handleTagUserRemoval);
-      });
-    }
-
-    async function handleTagUserGrant(event){
-      event.preventDefault();
-      const form = event.currentTarget;
-      const tagId = form.getAttribute('data-tag-id');
-      if (!tagId) return;
-      const input = form.querySelector('input[name="handle"]');
-      const submitBtn = form.querySelector('button[type="submit"]');
-      const slug = form.closest('.tag-vis-row')?.getAttribute('data-tag-slug') || '';
-      const handle = normalizeHandleInput(input?.value || '');
-      if (!handle) {
-        setTagStatusMessage(tagId, 'Enter a user handle', 'warn');
-        return;
-      }
-      clearTagStatusMessage(tagId);
-      setTagStatusMessage(tagId, `Granting #${slug} to @${handle}…`);
-      if (submitBtn) submitBtn.disabled = true;
-      try {
-        const res = await fetch(`/tags/${encodeURIComponent(tagId)}/visibility/users`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...authHeaders() },
-          body: JSON.stringify({ handle }),
-        });
-        if (res.status === 404) {
-          const text = await res.text();
-          if (text.includes('Tag not found')) {
-            setTagStatusMessage(tagId, 'Tag no longer exists', 'err');
-          } else {
-            setTagStatusMessage(tagId, 'User not found', 'warn');
-          }
-          return;
-        }
-        if (res.status === 400) {
-          const text = await res.text();
-          setTagStatusMessage(tagId, text || 'Invalid handle', 'warn');
-          return;
-        }
-        if (!res.ok) {
-          throw new Error(await res.text());
-        }
-        showToast(`Granted #${slug} to @${handle}`, 'ok');
-        if (input) input.value = '';
-        await loadTagVisibility(lastVisibilityQuery);
-      } catch (err) {
-        console.error('assign tag failed', err);
-        setTagStatusMessage(tagId, 'Failed to grant access', 'err');
-      } finally {
-        if (submitBtn) submitBtn.disabled = false;
-      }
-    }
-
-    async function handleTagUserRemoval(event){
-      event.preventDefault();
-      const btn = event.currentTarget;
-      const tagId = btn.getAttribute('data-tag-id');
-      const handle = btn.getAttribute('data-handle');
-      if (!tagId || !handle) return;
-      const slug = btn.closest('.tag-vis-row')?.getAttribute('data-tag-slug') || '';
-      setTagStatusMessage(tagId, `Removing @${handle}…`);
-      btn.disabled = true;
-      try {
-        const res = await fetch(`/tags/${encodeURIComponent(tagId)}/visibility/users/${encodeURIComponent(handle)}`, {
-          method: 'DELETE',
-          headers: { ...authHeaders() },
-        });
-        if (res.status === 404) {
-          const text = await res.text();
-          if (text.includes('Tag not found')) {
-            setTagStatusMessage(tagId, 'Tag no longer exists', 'err');
-          } else {
-            setTagStatusMessage(tagId, 'User not found', 'warn');
-          }
-          return;
-        }
-        if (!res.ok) {
-          throw new Error(await res.text());
-        }
-        showToast(`Removed #${slug} for @${handle}`, 'ok');
-        await loadTagVisibility(lastVisibilityQuery);
-      } catch (err) {
-        console.error('remove tag visibility failed', err);
-        setTagStatusMessage(tagId, 'Failed to remove access', 'err');
-      } finally {
-        btn.disabled = false;
-      }
-    }
-
-    async function loadTagVisibility(query=''){
-      lastVisibilityQuery = query || '';
-      elTagVisibility.innerHTML = '<div class="badge">Loading…</div>';
-      try{
-        const url = query ? `/tags/visibility?query=${encodeURIComponent(query)}` : '/tags/visibility';
-        const res = await fetch(url, { headers:{ ...authHeaders() } });
-        if(!res.ok) throw new Error(await res.text());
-        const data = await res.json();
-        renderTagVisibility(Array.isArray(data) ? data : []);
-      }catch(err){
-        console.error('loadTagVisibility failed', err);
-        elTagVisibility.innerHTML = '<div class="badge badge--err">Failed to load tag visibility</div>';
-      }
-    }
-
-    elTabReports.addEventListener('click', () => switchTab('reports'));
-    elTabNewContent.addEventListener('click', () => switchTab('new-content'));
-
-    // Placeholder for load more actions
-    document.getElementById('load-more-reports').addEventListener('click', () => {
-      showToast('Load more reports - placeholder action', 'info');
-    });
-    document.getElementById('load-more-new-content').addEventListener('click', () => {
-      showToast('Load more new content - placeholder action', 'info');
-    });
-
     // Admin Tags: combined usage + management
     const elTagsList = document.getElementById('tags-list');
-    const elTagVisibility = document.getElementById('tag-visibility');
-    const qTagVisibility = document.getElementById('q-tag-visibility');
-    const btnSearchVisibility = document.getElementById('btn-search-visibility');
+    const moderationLink = document.getElementById('moderation-link');
     let isAdmin = false;
     let lastQuery = '';
-    let lastVisibilityQuery = '';
 
     async function renderTags(rows){
       const html = rows.map(t => {
@@ -363,23 +132,6 @@
             }catch(err){ showToast('Failed to toggle', 'err'); }
           });
         });
-        elTagsList.querySelectorAll('button.unrestrict-tag').forEach(btn => {
-          btn.addEventListener('click', async () => {
-            const id = btn.getAttribute('data-id');
-            btn.disabled = true;
-            try {
-              const res = await fetch(`/tags/${id}/unrestrict`, { method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' } });
-              if (!res.ok) throw new Error(await res.text());
-              showToast('Tag opened for all users', 'ok');
-              await loadTagsCombined(lastQuery);
-            } catch (err) {
-              console.error('unrestrict failed', err);
-              showToast('Failed to open tag', 'err');
-            } finally {
-              btn.disabled = false;
-            }
-          });
-        });
       }
     }
 
@@ -415,7 +167,6 @@
           inp.value = '';
           showToast('Tag created', 'ok');
           await loadTagsCombined();
-          await loadTagVisibility(lastVisibilityQuery);
         }catch(err){
           showToast('Create failed', 'err');
         }finally{
@@ -429,9 +180,6 @@
     const qTagAdmin = document.getElementById('q-tag-admin');
     btnSearchTags?.addEventListener('click', () => loadTagsCombined(qTagAdmin.value));
     qTagAdmin?.addEventListener('keydown', (e) => { if(e.key==='Enter'){ loadTagsCombined(qTagAdmin.value); }});
-    btnSearchVisibility?.addEventListener('click', () => loadTagVisibility(qTagVisibility.value));
-    qTagVisibility?.addEventListener('keydown', (e) => { if(e.key==='Enter'){ loadTagVisibility(qTagVisibility.value); }});
-
     // Check if user has admin or moderator role
     async function checkAdminAccess() {
       try {
@@ -453,6 +201,7 @@
         // show Translations link for admins/moderators
         const i18nLink = document.getElementById('i18n-link');
         if (i18nLink) i18nLink.style.display = 'inline-flex';
+        if (moderationLink) moderationLink.style.display = 'inline-flex';
         const userAccessLink = document.getElementById('user-access-link');
         if (userAccessLink) userAccessLink.style.display = 'inline-flex';
         const tagsLink = document.getElementById('tags-link');
@@ -464,81 +213,12 @@
       }
     }
 
-    // SSE: Real-time notifications
-    function setupSSE(){
-      try{
-        const es = new EventSource('/notify/events');
-        es.onmessage = (evt) => {
-          try{
-            const data = JSON.parse(evt.data || '{}');
-            if(data && data.type){
-              if(data.type === 'post_created'){
-                const wrap = document.getElementById('new-content-list');
-                const el = document.createElement('div');
-                el.className = 'badge';
-                el.textContent = `New post: ${data.title || data.id}`;
-                wrap.prepend(el);
-                showToast('New post created', 'info');
-              }else if(data.type === 'reply_created'){
-                const wrap = document.getElementById('new-content-list');
-                const el = document.createElement('div');
-                el.className = 'badge';
-                el.textContent = `New reply: ${data.id}`;
-                wrap.prepend(el);
-                showToast('New reply added', 'info');
-              }else if(data.type === 'report_queued'){
-                const wrap = document.getElementById('reports-list');
-                const el = document.createElement('div');
-                el.className = 'report-item flex ai-c jc-b';
-                el.innerHTML = `
-                  <span class="badge">Report queued: ${data.target_type} ${data.target_id}${data.reason ? ' • ' + data.reason : ''}</span>
-                  <button class="btn btn--subtle resolve-btn" data-report-id="${data.id}">Resolve</button>
-                `;
-                wrap.prepend(el);
-                showToast('New report queued', 'warn');
-                // Bind resolve button
-                el.querySelector('.resolve-btn').addEventListener('click', async () => {
-                  try {
-                    const res = await fetch(`/moderation/reports/${data.id}/resolve`, {
-                      method: 'POST',
-                      headers: { ...authHeaders() },
-                    });
-                    if (!res.ok) throw new Error(await res.text());
-                    showToast('Report resolved', 'ok');
-                    // Remove the element or mark as resolved
-                    el.remove();
-                  } catch (err) {
-                    showToast('Failed to resolve report', 'err');
-                  }
-                });
-              }else if(data.type === 'report_processed'){
-                // Optionally handle, e.g., remove from list if still present
-                document.querySelectorAll('.report-item').forEach(item => {
-                  if (item.querySelector(`[data-report-id="${data.id}"]`)) {
-                    item.remove();
-                  }
-                });
-                showToast('Report processed', 'ok');
-              }
-            }
-          }catch(e){ /* ignore parse errors */ }
-        };
-        es.onerror = () => {
-          // Attempt a simple backoff reconnect
-          try{ es.close(); }catch{}
-          setTimeout(setupSSE, 2500);
-        };
-      }catch(e){ /* ignore */ }
-    }
-
     (async () => {
       const ok = await checkAdminAccess();
       if (ok) {
-        setupSSE();
         try {
           await Promise.all([
             loadTagsCombined(''),
-            loadTagVisibility(''),
           ]);
         } catch (err) {
           console.error('Admin data load failed', err);

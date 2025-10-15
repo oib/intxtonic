@@ -52,6 +52,19 @@
         </div>
       </div>
     </section>
+
+    <section class="row">
+      <div class="col-12">
+        <div class="card">
+          <h2 style="margin:0 0 12px">Tag Visibility</h2>
+          <div class="flex ai-c" style="gap:8px; margin-bottom:12px">
+            <input id="q-tag-visibility" class="input" placeholder="Filter tags" style="max-width:240px">
+            <button id="btn-search-visibility" class="btn btn--subtle" type="button">Filter</button>
+          </div>
+          <div id="tag-visibility" class="tags-list"></div>
+        </div>
+      </div>
+    </section>
   </main>
 
   <footer class="site">
@@ -71,6 +84,10 @@
         const adminTagsEl = document.getElementById('admin-tags');
         const userTagsEl = document.getElementById('user-tags');
         const refreshBtn = document.getElementById('refresh-btn');
+        const tagVisibilityEl = document.getElementById('tag-visibility');
+        const qTagVisibility = document.getElementById('q-tag-visibility');
+        const btnSearchVisibility = document.getElementById('btn-search-visibility');
+        let lastVisibilityQuery = '';
 
         if (yearEl) {
           yearEl.textContent = new Date().getFullYear().toString();
@@ -148,6 +165,182 @@
           }
         }
 
+        function normalizeHandleInput(value = '') {
+          const trimmed = value.trim();
+          if (!trimmed) return '';
+          return trimmed.startsWith('@') ? trimmed.slice(1) : trimmed;
+        }
+
+        function setTagStatusMessage(tagId, message, tone = 'info') {
+          const statusEl = tagVisibilityEl?.querySelector(`.tag-vis-status[data-tag-id="${tagId}"]`);
+          if (!statusEl) return;
+          statusEl.textContent = message;
+          const baseClass = 'tag-vis-status badge';
+          const toneClass = tone === 'err' ? ' badge--err' : tone === 'warn' ? ' badge--warn' : '';
+          statusEl.className = baseClass + toneClass;
+          statusEl.style.display = message ? 'inline-block' : 'none';
+        }
+
+        function clearTagStatusMessage(tagId) {
+          setTagStatusMessage(tagId, '');
+        }
+
+        function renderTagVisibility(rows) {
+          if (!tagVisibilityEl) return;
+          const html = rows.map((t) => {
+            const rolesHtml = t.roles.length
+              ? t.roles.map((r) => `<span class="badge">${r.name}</span>`).join(' ')
+              : '<span class="badge">none</span>';
+            const usersHtml = t.users.length
+              ? t.users
+                  .map(
+                    (u) => `
+              <div class="flex ai-c" style="gap:6px">
+                <span class="badge">@${u.handle}</span>
+                <button type="button" class="btn btn--ghost tag-vis-remove-user" data-tag-id="${t.tag_id}" data-handle="${u.handle}">Remove</button>
+              </div>
+            `
+                  )
+                  .join('')
+              : '<div class="badge">No user overrides</div>';
+            return `
+          <div class="tag-vis-row" data-tag-id="${t.tag_id}" data-tag-slug="${t.slug}" style="padding:12px 0; border-bottom:1px solid rgba(185,236,255,.12)">
+            <div class="flex ai-c jc-b" style="gap:16px; flex-wrap:wrap">
+              <div class="flex ai-c" style="gap:8px">
+                <span class="badge">#${t.slug}</span>
+                <span>${t.label || ''}</span>
+              </div>
+              <div class="flex ai-c" style="gap:8px; flex-wrap:wrap">
+                <strong>Roles</strong>
+                <div class="flex ai-c" style="gap:6px; flex-wrap:wrap">${rolesHtml}</div>
+              </div>
+            </div>
+            <div class="tag-vis-users" style="margin-top:12px">
+              <div><strong>Users</strong></div>
+              <div class="tag-vis-user-list" style="margin-top:6px; display:flex; flex-direction:column; gap:6px">
+                ${usersHtml}
+              </div>
+              <form class="tag-vis-add-user flex" data-tag-id="${t.tag_id}" style="gap:8px; flex-wrap:wrap; margin-top:12px">
+                <input name="handle" class="input" placeholder="Add @handle" autocomplete="off" style="max-width:220px">
+                <button class="btn btn--subtle" type="submit">Grant access</button>
+              </form>
+              <div class="tag-vis-status badge" data-tag-id="${t.tag_id}" style="display:none; margin-top:8px"></div>
+            </div>
+          </div>
+        `;
+          }).join('');
+          tagVisibilityEl.innerHTML = html || '<div class="badge">No visibility overrides</div>';
+
+          tagVisibilityEl.querySelectorAll('.tag-vis-add-user').forEach((form) => {
+            form.addEventListener('submit', handleTagUserGrant);
+          });
+          tagVisibilityEl.querySelectorAll('.tag-vis-remove-user').forEach((btn) => {
+            btn.addEventListener('click', handleTagUserRemoval);
+          });
+        }
+
+        async function handleTagUserGrant(event) {
+          event.preventDefault();
+          const form = event.currentTarget;
+          const tagId = form.getAttribute('data-tag-id');
+          if (!tagId) return;
+          const input = form.querySelector('input[name="handle"]');
+          const submitBtn = form.querySelector('button[type="submit"]');
+          const slug = form.closest('.tag-vis-row')?.getAttribute('data-tag-slug') || '';
+          const handle = normalizeHandleInput(input?.value || '');
+          if (!handle) {
+            setTagStatusMessage(tagId, 'Enter a user handle', 'warn');
+            return;
+          }
+          clearTagStatusMessage(tagId);
+          setTagStatusMessage(tagId, `Granting #${slug} to @${handle}…`);
+          if (submitBtn) submitBtn.disabled = true;
+          try {
+            const res = await fetch(`/tags/${encodeURIComponent(tagId)}/visibility/users`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...authHeaders() },
+              body: JSON.stringify({ handle }),
+            });
+            if (res.status === 404) {
+              const text = await res.text();
+              if (text.includes('Tag not found')) {
+                setTagStatusMessage(tagId, 'Tag no longer exists', 'err');
+              } else {
+                setTagStatusMessage(tagId, 'User not found', 'warn');
+              }
+              return;
+            }
+            if (res.status === 400) {
+              const text = await res.text();
+              setTagStatusMessage(tagId, text || 'Invalid handle', 'warn');
+              return;
+            }
+            if (!res.ok) {
+              throw new Error(await res.text());
+            }
+            showToast(`Granted #${slug} to @${handle}`, 'ok');
+            if (input) input.value = '';
+            await loadTagVisibility(lastVisibilityQuery);
+          } catch (err) {
+            console.error('assign tag failed', err);
+            setTagStatusMessage(tagId, 'Failed to grant access', 'err');
+          } finally {
+            if (submitBtn) submitBtn.disabled = false;
+          }
+        }
+
+        async function handleTagUserRemoval(event) {
+          event.preventDefault();
+          const btn = event.currentTarget;
+          const tagId = btn.getAttribute('data-tag-id');
+          const handle = btn.getAttribute('data-handle');
+          if (!tagId || !handle) return;
+          const slug = btn.closest('.tag-vis-row')?.getAttribute('data-tag-slug') || '';
+          setTagStatusMessage(tagId, `Removing @${handle}…`);
+          btn.disabled = true;
+          try {
+            const res = await fetch(`/tags/${encodeURIComponent(tagId)}/visibility/users/${encodeURIComponent(handle)}`, {
+              method: 'DELETE',
+              headers: { ...authHeaders() },
+            });
+            if (res.status === 404) {
+              const text = await res.text();
+              if (text.includes('Tag not found')) {
+                setTagStatusMessage(tagId, 'Tag no longer exists', 'err');
+              } else {
+                setTagStatusMessage(tagId, 'User not found', 'warn');
+              }
+              return;
+            }
+            if (!res.ok) {
+              throw new Error(await res.text());
+            }
+            showToast(`Removed #${slug} for @${handle}`, 'ok');
+            await loadTagVisibility(lastVisibilityQuery);
+          } catch (err) {
+            console.error('remove tag visibility failed', err);
+            setTagStatusMessage(tagId, 'Failed to remove access', 'err');
+          } finally {
+            btn.disabled = false;
+          }
+        }
+
+        async function loadTagVisibility(query = '') {
+          if (!tagVisibilityEl) return;
+          lastVisibilityQuery = query || '';
+          tagVisibilityEl.innerHTML = '<div class="badge">Loading…</div>';
+          try {
+            const url = query ? `/tags/visibility?query=${encodeURIComponent(query)}` : '/tags/visibility';
+            const res = await fetch(url, { headers: { ...authHeaders() } });
+            if (!res.ok) throw new Error(await res.text());
+            const data = await res.json();
+            renderTagVisibility(Array.isArray(data) ? data : []);
+          } catch (err) {
+            console.error('loadTagVisibility failed', err);
+            tagVisibilityEl.innerHTML = '<div class="badge badge--err">Failed to load tag visibility</div>';
+          }
+        }
+
         if (logoutBtn) {
           logoutBtn.addEventListener('click', async () => {
             try {
@@ -163,10 +356,24 @@
           refreshBtn.addEventListener('click', () => { fetchTagGroups(); });
         }
 
+        if (btnSearchVisibility) {
+          btnSearchVisibility.addEventListener('click', () => { loadTagVisibility(qTagVisibility?.value || ''); });
+        }
+
+        if (qTagVisibility) {
+          qTagVisibility.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              loadTagVisibility(qTagVisibility.value);
+            }
+          });
+        }
+
         refreshAuthUI();
         ensureAdmin().then((ok) => {
           if (ok) {
             fetchTagGroups();
+            loadTagVisibility('');
           }
         });
       });

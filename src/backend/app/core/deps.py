@@ -77,6 +77,24 @@ async def require_moderator(request: Request) -> None:
     await require_role(request, "moderator")
 
 
+async def require_admin_or_moderator(request: Request) -> None:
+    account_id = await get_current_account_id(request)
+    pool = get_pool(request)
+    query = """
+        SELECT 1
+        FROM app.account_roles ar
+        JOIN app.roles r ON r.id = ar.role_id
+        WHERE ar.account_id = %s AND r.name IN ('admin', 'moderator')
+        LIMIT 1
+    """
+    async with pool.connection() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(query, (account_id,))
+            row = await cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+
 async def is_admin_account(pool, account_id: Optional[str]) -> bool:
     if not account_id:
         return False

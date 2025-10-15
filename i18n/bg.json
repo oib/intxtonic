@@ -64,5 +64,6 @@
   "admin.i18n": "Please provide the text you would like me to translate! 😊",
   "toast.import_failed": "“Import failed” translates to “Import error” in Bulgarian.",
   "toast.translate_failed": "The system failed to translate the text.",
-  "toast.nothing_to_translate": "Nothing to translate."
+  "toast.nothing_to_translate": "Nothing to translate.",
+  "landing.lang_label": "Выберите язичка"
 }

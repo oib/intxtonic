@@ -1,8 +1,26 @@
 import os
 import subprocess
 import json
+import logging
 
 from ..core.config import get_settings
+
+
+logger = logging.getLogger(__name__)
+
+if not logging.getLogger().handlers:
+    logging.basicConfig(level=logging.INFO)
+
+_FILE_LOGGER = logging.getLogger("translation_debug")
+if not any(isinstance(h, logging.FileHandler) and getattr(h, "baseFilename", "").endswith("translation-debug.log") for h in _FILE_LOGGER.handlers):
+    from pathlib import Path
+
+    log_path = Path(__file__).resolve().parents[4] / "dev" / "logs" / "translation-debug.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    file_handler = logging.FileHandler(log_path, encoding="utf-8")
+    file_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+    _FILE_LOGGER.addHandler(file_handler)
+    _FILE_LOGGER.setLevel(logging.INFO)
 
 
 _LANGUAGE_LABELS = {
@@ -30,7 +48,42 @@ def _language_label(code: str) -> str:
     return _LANGUAGE_LABELS.get(norm, code)
 
 
-async def translate_text(text: str, target_language: str, return_prompt: bool = False, extra_rules: str | None = None):
+def split_text_into_chunks(text: str, max_chars: int = 1200) -> list[str]:
+    if not text:
+        return [""]
+    paragraphs = text.split('\n\n')
+    chunks: list[str] = []
+    current: list[str] = []
+    current_len = 0
+
+    for para in paragraphs:
+        para_len = len(para)
+        if current:
+            para_len += 2  # account for the double newline separator
+        if current and current_len + para_len > max_chars:
+            chunks.append('\n\n'.join(current))
+            current = [para]
+            current_len = len(para)
+        else:
+            if current:
+                current_len += 2 + len(para)
+            else:
+                current_len = len(para)
+            current.append(para)
+
+    if current:
+        chunks.append('\n\n'.join(current))
+    elif not chunks:
+        chunks.append("")
+    return chunks
+
+
+async def translate_text(
+    text: str,
+    target_language: str,
+    return_prompt: bool = False,
+    extra_rules: str | None = None,
+):
     settings = get_settings()
     base_url = settings.ollama_base_url
     api_key = settings.ollama_api_key
@@ -46,22 +99,14 @@ async def translate_text(text: str, target_language: str, return_prompt: bool = 
         f"- Respond in {language_label} only.",
         "- Return ONLY the translated text.",
         "- Do NOT add explanations, quotes, labels, or code fences.",
+        "- Do NOT summarize, shorten, or omit any portion of the original content.",
+        "- Preserve paragraph breaks and line breaks from the source text.",
         "- Preserve placeholders exactly as-is (e.g., {name}, {count}).",
         "- Do NOT add punctuation that is not present in the source unless required by grammar.",
         "- Do NOT return exactly the same text as the source unless it is a proper noun/brand/acronym or already localized.",
     ]
     if extra_rules:
         rules.append(extra_rules)
-
-    prompt = (
-        f"Translate the following text to {language_spec}.\n"
-        "Rules:\n" + "\n".join(rules) + "\n\n"
-        f"Text:\n{text}"
-    )
-    sequence = [
-        'system: You are a professional translator. Follow the rules strictly and return only the translation.',
-        f'user: {prompt}'
-    ]
 
     try:
         env = os.environ.copy()
@@ -72,22 +117,73 @@ async def translate_text(text: str, target_language: str, return_prompt: bool = 
         if model:
             env['OLLAMA_MODEL'] = model
 
-        result = subprocess.run(
-            ['node', 'src/backend/js/ollama_cli.mjs', json.dumps(sequence)],
-            capture_output=True,
-            text=True,
-            env=env,
-            timeout=60,
+        translated_chunks: list[str] = []
+        first_prompt: str | None = None
+        chunks = split_text_into_chunks(text or "")
+        logger.debug(
+            "Translating %d chunk(s) for target language %s", len(chunks), target_language
+        )
+        _FILE_LOGGER.info(
+            "start translation chunks=%d target=%s", len(chunks), target_language
         )
 
-        if result.returncode != 0:
-            raise Exception(f'CLI error: {result.stderr}')
+        for idx, chunk in enumerate(chunks):
+            prompt = (
+                f"Translate the following text to {language_spec}.\n"
+                "Rules:\n" + "\n".join(rules) + "\n\n"
+                f"Text:\n{chunk}"
+            )
+            sequence = [
+                'system: You are a professional translator. Follow the rules strictly and return only the translation.',
+                f'user: {prompt}'
+            ]
 
-        output = result.stdout.strip()
+            logger.debug(
+                "Submitting chunk %d/%d for translation (chars=%d)",
+                idx + 1,
+                len(chunks),
+                len(chunk),
+            )
+            _FILE_LOGGER.info(
+                "chunk submit index=%d total=%d chars=%d",
+                idx + 1,
+                len(chunks),
+                len(chunk),
+            )
+            result = subprocess.run(
+                ['node', 'src/backend/js/ollama_cli.mjs', json.dumps(sequence)],
+                capture_output=True,
+                text=True,
+                env=env,
+                timeout=60,
+            )
+
+            if result.returncode != 0:
+                raise Exception(f'CLI error: {result.stderr}')
+
+            output = result.stdout.strip()
+            translated_chunks.append(output)
+            logger.debug(
+                "Received translation for chunk %d/%d (chars=%d)",
+                idx + 1,
+                len(chunks),
+                len(output),
+            )
+            _FILE_LOGGER.info(
+                "chunk complete index=%d total=%d chars=%d",
+                idx + 1,
+                len(chunks),
+                len(output),
+            )
+            if idx == 0 and return_prompt:
+                first_prompt = prompt
+
+        combined_output = "\n".join(translated_chunks)
         if return_prompt:
-            return {"output": output, "prompt": prompt}
-        return output
+            return {"output": combined_output, "prompt": first_prompt or ""}
+        return combined_output
     except Exception as e:
+        _FILE_LOGGER.error("translation failed: %s", str(e), exc_info=True)
         raise Exception(f'Failed to translate text: {str(e)}')
 
 
