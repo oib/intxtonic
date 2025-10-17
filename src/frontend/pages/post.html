@@ -116,7 +116,10 @@
     import { t } from '/src/frontend/js/i18n-runtime.js';
     import { initBookmarkToggles } from '/src/frontend/js/bookmarks.js';
 
-    document.getElementById('year').textContent = new Date().getFullYear().toString();
+    const yearEl = document.getElementById('year');
+    if (yearEl) {
+      yearEl.textContent = new Date().getFullYear().toString();
+    }
 
     // Guest guard: redirect unauthenticated users to login
     if (!getToken()) { window.location.href = '/login'; }
