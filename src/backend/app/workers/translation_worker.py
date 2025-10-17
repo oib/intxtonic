@@ -128,11 +128,29 @@ async def handle_summarize(redis: Redis, pool, job_key: str, source_type: str, s
 
     summary = await summarize_text(body_md, target_lang)
     async with pool.connection() as conn:
+        existing_body_trans: str | None = None
+        async with conn.cursor() as cur:
+            await cur.execute(
+                """
+                SELECT body_trans_md
+                FROM app.translations
+                WHERE source_type = %s AND source_id = %s AND target_lang = %s
+                LIMIT 1
+                """,
+                (source_type, source_id, target_lang),
+            )
+            row = await cur.fetchone()
+            if row and row[0]:
+                existing_body_trans = row[0]
+
+        body_for_storage = existing_body_trans if existing_body_trans is not None else (body_md or "")
+
         await store_translation(
             conn,
             source_type=source_type,
             source_id=source_id,
             target_lang=target_lang,
+            body_trans_md=body_for_storage,
             summary_md=summary,
         )
         await conn.commit()

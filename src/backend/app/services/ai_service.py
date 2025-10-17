@@ -2,6 +2,7 @@ import os
 import subprocess
 import json
 import logging
+from pathlib import Path
 
 from ..core.config import get_settings
 
@@ -21,6 +22,15 @@ if not any(isinstance(h, logging.FileHandler) and getattr(h, "baseFilename", "")
     file_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
     _FILE_LOGGER.addHandler(file_handler)
     _FILE_LOGGER.setLevel(logging.INFO)
+
+
+_CLI_PATH = Path(__file__).resolve().parent.parent.parent / "js" / "ollama_cli.mjs"
+if not _CLI_PATH.exists():
+    candidate = Path(__file__).resolve().parents[3] / "backend" / "js" / "ollama_cli.mjs"
+    if candidate.exists():
+        _CLI_PATH = candidate
+    else:
+        raise FileNotFoundError(f"ollama_cli.mjs not found at {_CLI_PATH} or {candidate}")
 
 
 _LANGUAGE_LABELS = {
@@ -152,7 +162,7 @@ async def translate_text(
                 len(chunk),
             )
             result = subprocess.run(
-                ['node', 'src/backend/js/ollama_cli.mjs', json.dumps(sequence)],
+                ['node', str(_CLI_PATH), json.dumps(sequence)],
                 capture_output=True,
                 text=True,
                 env=env,
@@ -223,7 +233,7 @@ async def summarize_text(text: str, language: str) -> str:
             env['OLLAMA_MODEL'] = model
 
         result = subprocess.run(
-            ['node', 'src/backend/js/ollama_cli.mjs', json.dumps(sequence)],
+            ['node', str(_CLI_PATH), json.dumps(sequence)],
             capture_output=True,
             text=True,
             env=env,

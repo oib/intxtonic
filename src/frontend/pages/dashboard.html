@@ -54,9 +54,12 @@
     <section class="row">
       <div class="col-12">
         <div class="card">
-          <div class="flex ai-c">
-            <h2 data-i18n="dashboard.latest_posts">Latest Posts</h2> <small id="total" style="font-size:12px; color:var(--tx-1);"></small>
-            <div class="flex ai-c" style="gap:8px">
+          <div class="flex" style="gap:12px; flex-direction:column;">
+            <div class="flex ai-c" style="gap:8px;">
+              <h2 data-i18n="dashboard.latest_posts">Latest Posts</h2>
+              <small id="total" style="font-size:12px; color:var(--tx-1);"></small>
+            </div>
+            <div class="flex ai-c" style="gap:8px; flex-wrap:wrap">
               <label class="flex ai-c" style="gap:6px">
                 <span class="hide-sm" data-i18n="dashboard.sort">Sort</span>
                 <select id="sort" class="input" style="max-width:140px">

@@ -53,22 +53,22 @@
 
   <main class="container">
     <section class="card">
-      <h1 style="margin-top:0">Account settings</h1>
-      <p class="hint">Update your language preferences, test notifications, or change your password.</p>
+      <h1 style="margin-top:0" data-i18n="settings.title">Account settings</h1>
+      <p class="hint" data-i18n="settings.subtitle">Update your language preferences, test notifications, or change your password.</p>
     </section>
 
     <section class="settings-grid">
       <article class="settings-section" id="prefs-section">
-        <h2>Language preference</h2>
-        <p class="hint">Choose the default language we use for UI, translations, and summaries.</p>
+        <h2 data-i18n="settings.language_section_title">Language preference</h2>
+        <p class="hint" data-i18n="settings.language_section_hint">Choose the default language we use for UI, translations, and summaries.</p>
         <label class="flex ai-c" style="gap:8px; flex-wrap:wrap">
-          <span>Display name</span>
-          <input id="display-name" class="input" type="text" maxlength="80" placeholder="Your display name" style="max-width:320px">
+          <span data-i18n="settings.display_name_label">Display name</span>
+          <input id="display-name" class="input" type="text" maxlength="80" placeholder="Your display name" data-i18n-placeholder="settings.display_name_placeholder" style="max-width:320px">
         </label>
         <label class="flex ai-c" style="gap:8px; flex-wrap:wrap">
-          <span>Default language</span>
+          <span data-i18n="settings.locale_label">Default language</span>
           <select id="locale" class="input" style="max-width:220px">
-            <option value="">Auto (unset)</option>
+            <option value="" data-i18n="settings.locale_option_auto">Auto (unset)</option>
             <option value="bg">Български (Bulgarian)</option>
             <option value="hr">Hrvatski (Croatian)</option>
             <option value="cs">Čeština (Czech)</option>
@@ -96,42 +96,42 @@
           </select>
         </label>
         <div class="settings-actions" style="margin-top:8px">
-          <button id="btn-save-preferences" class="btn" type="button">Save changes</button>
+          <button id="btn-save-preferences" class="btn" type="button" data-i18n="settings.save_button">Save changes</button>
         </div>
       </article>
 
       <article class="settings-section" id="notifications-section">
-        <h2>Notifications</h2>
-        <p class="hint">Enable browser notifications to stay informed while inTXTonic runs in the background.</p>
+        <h2 data-i18n="settings.notifications_title">Notifications</h2>
+        <p class="hint" data-i18n="settings.notifications_hint">Enable browser notifications to stay informed while inTXTonic runs in the background.</p>
         <div class="settings-actions">
-          <button id="btn-test-notify" class="btn btn--subtle" type="button">Try notification</button>
+          <button id="btn-test-notify" class="btn btn--subtle" type="button" data-i18n="settings.notifications_test_button">Try notification</button>
         </div>
       </article>
 
       <article class="settings-section" id="password-section">
-        <h2>Change password</h2>
-        <p class="hint">Update your password to keep your account secure. The new password must be at least 8 characters long.</p>
+        <h2 data-i18n="settings.password_title">Change password</h2>
+        <p class="hint" data-i18n="settings.password_hint">Update your password to keep your account secure. The new password must be at least 8 characters long.</p>
         <form id="password-form" class="settings-actions" style="flex-direction:column; align-items:flex-start; gap:12px; max-width:360px;">
           <label class="flex ai-c" style="gap:8px; width:100%; flex-wrap:wrap">
-            <span style="min-width:120px;">Current password</span>
+            <span style="min-width:120px;" data-i18n="settings.password_current">Current password</span>
             <input id="current-password" type="password" class="input" autocomplete="current-password" required>
           </label>
           <label class="flex ai-c" style="gap:8px; width:100%; flex-wrap:wrap">
-            <span style="min-width:120px;">New password</span>
+            <span style="min-width:120px;" data-i18n="settings.password_new">New password</span>
             <input id="new-password" type="password" class="input" autocomplete="new-password" required>
           </label>
           <div class="flex" style="gap:8px">
-            <button class="btn" type="submit">Change password</button>
-            <button class="btn btn--subtle" type="button" id="reset-password-form">Clear</button>
+            <button class="btn" type="submit" data-i18n="settings.password_submit">Change password</button>
+            <button class="btn btn--subtle" type="button" id="reset-password-form" data-i18n="settings.password_clear">Clear</button>
           </div>
         </form>
       </article>
 
       <article class="settings-section" id="account-section">
-        <h2>Danger zone</h2>
-        <p class="hint">Deleting your account will remove your profile, posts, and personal data. This action cannot be undone.</p>
+        <h2 data-i18n="settings.danger_title">Danger zone</h2>
+        <p class="hint" data-i18n="settings.danger_hint">Deleting your account will remove your profile, posts, and personal data. This action cannot be undone.</p>
         <div class="settings-actions">
-          <button id="btn-delete-account" class="btn btn--danger" type="button">Delete account</button>
+          <button id="btn-delete-account" class="btn btn--danger" type="button" data-i18n="settings.danger_delete">Delete account</button>
         </div>
         <div id="delete-account-msg" class="badge" style="display:none; margin-top:12px"></div>
       </article>

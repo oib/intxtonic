@@ -205,6 +205,27 @@ export async function summarizePost(postId, opts = {}) {
   }
 }
 
+function formatWithLineBreaks(text) {
+  return (text || '')
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map(line => line.trim().length ? line : '')
+    .map(line => (line ? line : '<br>'))
+    .join('<br>');
+}
+
+function setButtonEnabled(btn, enabled) {
+  if (!btn) return;
+  btn.disabled = !enabled;
+  btn.setAttribute('aria-disabled', enabled ? 'false' : 'true');
+}
+
+function extractPlainText(el) {
+  if (!el) return '';
+  const text = el.textContent || '';
+  return text.trim();
+}
+
 // Function to bind translation and summarization actions to buttons
 export function bindAIActions(container) {
   // Bind translate buttons
@@ -263,7 +284,8 @@ export function bindAIActions(container) {
             summaryBlock.style.marginTop = '8px';
             postElement.appendChild(summaryBlock);
           }
-          summaryBlock.innerHTML = `<strong>Summary:</strong> ${result.summary}`;
+          const formattedSummary = formatWithLineBreaks(result.summary);
+          summaryBlock.innerHTML = `<h2>Summary</h2><div>${formattedSummary}</div>`;
         }
       }
     });
@@ -275,11 +297,24 @@ export function bindPostPageAIActions(postId) {
   const translateBtn = document.getElementById('translate-post');
   const summarizeBtn = document.getElementById('summarize-post');
   const bodyEl = document.getElementById('body');
+  const translationSection = document.getElementById('post-translation-section');
+  const translationContent = document.getElementById('post-translation');
+  const summarySection = document.getElementById('post-summary-section');
+  const summaryContent = document.getElementById('post-summary');
   let lastTranslation = null;
+
+  const existingTranslation = extractPlainText(translationContent);
+  if (existingTranslation) {
+    lastTranslation = existingTranslation;
+    if (translationSection) translationSection.style.display = 'block';
+  }
+
+  setButtonEnabled(summarizeBtn, !!lastTranslation);
 
   if (translateBtn) {
     translateBtn.addEventListener('click', async () => {
       setButtonLoading(translateBtn, 'Translating…');
+      setButtonEnabled(summarizeBtn, false);
       let result = null;
       try {
         result = await translatePost(postId);
@@ -287,22 +322,26 @@ export function bindPostPageAIActions(postId) {
         resetButtonLoading(translateBtn);
       }
       lastTranslation = result?.translated_text || null;
-      if (result && result.translated_text && bodyEl) {
-        const withBreaks = result.translated_text
-          .replace(/\r\n/g, '\n')
-          .split('\n')
-          .map(line => line.trim().length ? line : '')
-          .map(line => line ? line : '<br>')
-          .join('<br>');
-        let translatedBlock = bodyEl.querySelector('.translated-text');
-        if (!translatedBlock) {
-          translatedBlock = document.createElement('div');
-          translatedBlock.className = 'translated-text';
-          translatedBlock.style.marginTop = '12px';
-          bodyEl.appendChild(translatedBlock);
+      if (result && result.translated_text) {
+        const withBreaks = formatWithLineBreaks(result.translated_text);
+        if (translationSection && translationContent) {
+          translationContent.innerHTML = withBreaks;
+          translationSection.style.display = 'block';
+        } else if (bodyEl) {
+          let translatedBlock = bodyEl.querySelector('.translated-text');
+          if (!translatedBlock) {
+            translatedBlock = document.createElement('div');
+            translatedBlock.className = 'translated-text';
+            translatedBlock.style.marginTop = '12px';
+            bodyEl.appendChild(translatedBlock);
+          }
+          translatedBlock.innerHTML = `<h2>Translated</h2><div>${withBreaks}</div>`;
         }
-        translatedBlock.innerHTML = `<strong>Translated:</strong><br>${withBreaks}`;
       }
+      if (!lastTranslation && existingTranslation) {
+        lastTranslation = existingTranslation;
+      }
+      setButtonEnabled(summarizeBtn, !!lastTranslation);
     });
   }
 
@@ -315,15 +354,21 @@ export function bindPostPageAIActions(postId) {
       } finally {
         resetButtonLoading(summarizeBtn);
       }
-      if (result && result.summary && bodyEl) {
-        let summaryBlock = bodyEl.querySelector('.summary-text');
-        if (!summaryBlock) {
-          summaryBlock = document.createElement('div');
-          summaryBlock.className = 'summary-text';
-          summaryBlock.style.marginTop = '12px';
-          bodyEl.appendChild(summaryBlock);
+      if (result && result.summary) {
+        const formattedSummary = formatWithLineBreaks(result.summary);
+        if (summarySection && summaryContent) {
+          summaryContent.innerHTML = formattedSummary;
+          summarySection.style.display = 'block';
+        } else if (bodyEl) {
+          let summaryBlock = bodyEl.querySelector('.summary-text');
+          if (!summaryBlock) {
+            summaryBlock = document.createElement('div');
+            summaryBlock.className = 'summary-text';
+            summaryBlock.style.marginTop = '12px';
+            bodyEl.appendChild(summaryBlock);
+          }
+          summaryBlock.innerHTML = `<h2>Summary</h2><div>${formattedSummary}</div>`;
         }
-        summaryBlock.innerHTML = `<strong>Summary:</strong> ${result.summary}`;
       }
     });
   }

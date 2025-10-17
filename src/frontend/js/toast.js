@@ -43,7 +43,9 @@ export function showToast(msg, type = "ok", ms = 3500) {
   el.textContent = msg;
   root.appendChild(el);
 
-  const timeoutId = setTimeout(() => el.remove(), ms);
-  el.addEventListener("mouseenter", () => clearTimeout(timeoutId));
+  if (ms !== false && ms !== null) {
+    const timeoutId = setTimeout(() => el.remove(), ms);
+    el.addEventListener("mouseenter", () => clearTimeout(timeoutId));
+  }
   el.addEventListener("click", () => el.remove());
 }

@@ -323,6 +323,12 @@
       if (body_md.length > BODY_LIMIT) { showToast('Post body too long (max 600 characters)','warn'); return; }
       try {
         const res = await fetch('/posts', { method:'POST', headers:{ 'Content-Type':'application/json', ...authHeaders() }, body: JSON.stringify({ title, body_md }) });
+        if (res.status === 401) {
+          clearToken();
+          showToast('Please sign in to publish posts','warn');
+          window.location.href = '/login';
+          return;
+        }
         if (!res.ok) throw new Error(await res.text());
         const data = await res.json();
         showToast('Post published','ok');

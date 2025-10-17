@@ -221,6 +221,10 @@ async def delete_account(req: Request, account_id: str = Depends(get_current_acc
                 (account_id,),
             )
             await cur.execute(
+                "DELETE FROM app.tag_visibility WHERE account_id=%s",
+                (account_id,),
+            )
+            await cur.execute(
                 "DELETE FROM app.tags WHERE lower(slug)=lower(%s) AND created_by_admin = false",
                 (current_handle,),
             )
