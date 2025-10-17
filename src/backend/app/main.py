@@ -192,6 +192,10 @@ def magic_login_page():
 def reset_password_page():
     return FileResponse("src/frontend/pages/reset-password.html")
 
+@app.get("/set-password")
+def set_password_page():
+    return FileResponse("src/frontend/pages/set-password.html")
+
 
 @app.get("/post/{post_id}")
 def post_page(post_id: str):

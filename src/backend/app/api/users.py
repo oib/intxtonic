@@ -77,7 +77,7 @@ class UpdateMeIn(BaseModel):
 
 
 class UpdatePasswordIn(BaseModel):
-    current_password: constr(min_length=1)
+    current_password: Optional[str] = None
     new_password: constr(min_length=8)
 
 
@@ -166,10 +166,12 @@ async def change_password(req: Request, body: UpdatePasswordIn, account_id: str 
             if not row:
                 raise HTTPException(status_code=404, detail="User not found")
             stored_hash = row[0] or ""
-            if not stored_hash:
-                raise HTTPException(status_code=409, detail="Password login disabled for this account")
-            if not verify_password(body.current_password, stored_hash):
-                raise HTTPException(status_code=403, detail="Current password incorrect")
+            provided_current = (body.current_password or "").strip()
+            # If no password is set yet (e.g., magic-link accounts), or the request omits the current password,
+            # allow setting the password directly. Otherwise, verify the supplied current password first.
+            if stored_hash and provided_current:
+                if not verify_password(provided_current, stored_hash):
+                    raise HTTPException(status_code=403, detail="Current password incorrect")
             new_hash = get_password_hash(body.new_password)
             await cur.execute("UPDATE app.accounts SET password_hash=%s WHERE id=%s", (new_hash, account_id))
     return

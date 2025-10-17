@@ -84,7 +84,7 @@
         await consumeMagicLink(token);
         showToast('Signed in', 'ok');
         show(viewSuccess);
-        setTimeout(() => { window.location.href = '/home'; }, 2000);
+        setTimeout(() => { window.location.href = '/set-password'; }, 1200);
       } catch (err) {
         const message = parseErrorMessage(err);
         errorMessage.textContent = message;

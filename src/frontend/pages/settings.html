@@ -114,7 +114,7 @@
         <form id="password-form" class="settings-actions" style="flex-direction:column; align-items:flex-start; gap:12px; max-width:360px;">
           <label class="flex ai-c" style="gap:8px; width:100%; flex-wrap:wrap">
             <span style="min-width:120px;" data-i18n="settings.password_current">Current password</span>
-            <input id="current-password" type="password" class="input" autocomplete="current-password" required>
+            <input id="current-password" type="password" class="input" autocomplete="current-password">
           </label>
           <label class="flex ai-c" style="gap:8px; width:100%; flex-wrap:wrap">
             <span style="min-width:120px;" data-i18n="settings.password_new">New password</span>
@@ -123,6 +123,9 @@
           <div class="flex" style="gap:8px">
             <button class="btn" type="submit" data-i18n="settings.password_submit">Change password</button>
             <button class="btn btn--subtle" type="button" id="reset-password-form" data-i18n="settings.password_clear">Clear</button>
+          </div>
+          <div class="hint" style="color:var(--tx-1)">
+            Forgot your current password? <a href="/reset-password" class="link">Reset it here</a>.
           </div>
         </form>
       </article>
@@ -251,10 +254,10 @@
 
     passwordForm.addEventListener('submit', async (event) => {
       event.preventDefault();
-      const currentPassword = currentPasswordInput.value.trim();
-      const newPassword = newPasswordInput.value.trim();
-      if (!currentPassword || !newPassword) {
-        showToast('Fill in both password fields', 'warn');
+      const currentPassword = currentPasswordInput.value;
+      const newPassword = newPasswordInput.value;
+      if (!newPassword) {
+        showToast('Enter a new password', 'warn');
         return;
       }
       if (newPassword.length < 8) {
@@ -269,7 +272,20 @@
         });
         if (!res.ok) {
           const text = await res.text();
-          throw new Error(text || 'Failed to change password');
+          let msg = 'Failed to change password';
+          try {
+            const obj = JSON.parse(text);
+            const detail = obj?.error?.message || obj?.detail || '';
+            if (res.status === 409 && /Password login disabled/i.test(detail)) {
+              msg = 'No password set for this account. Use Reset Password to set one.';
+            } else if (res.status === 403 && /Current password incorrect/i.test(detail)) {
+              msg = 'Current password incorrect. If you signed in via magic link or forgot it, use Reset Password.';
+            } else if (detail) {
+              msg = detail;
+            }
+          } catch {}
+          showToast(msg, 'warn');
+          return;
         }
         currentPasswordInput.value = '';
         newPasswordInput.value = '';
