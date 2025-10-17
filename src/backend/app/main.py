@@ -19,6 +19,7 @@ from .api.posts import router as posts_router
 from .api.users import router as users_router
 from .api.ai import ai_route as ai_router
 from .api.notify import router as notify_router
+from .api.admin_queue import router as admin_queue_router
 from .api.uploads import router as uploads_router
 from .api.moderation import router as moderation_router
 
@@ -140,6 +141,7 @@ app.include_router(posts_router)
 app.include_router(users_router)
 app.include_router(ai_router)
 app.include_router(i18n_admin_router)
+app.include_router(admin_queue_router)
 app.include_router(moderation_router)
 app.include_router(notify_router)
 app.include_router(uploads_router)
@@ -186,6 +188,11 @@ def magic_login_page():
     return FileResponse("src/frontend/pages/magic-login.html")
 
 
+@app.get("/reset-password")
+def reset_password_page():
+    return FileResponse("src/frontend/pages/reset-password.html")
+
+
 @app.get("/post/{post_id}")
 def post_page(post_id: str):
     return FileResponse("src/frontend/pages/post.html")
@@ -219,6 +226,11 @@ def admin_tags_page():
 @app.get("/admin/moderation")
 def admin_moderation_page():
     return FileResponse("src/frontend/pages/admin-moderation.html")
+
+
+@app.get("/admin/queue")
+def admin_queue_page():
+    return FileResponse("src/frontend/pages/admin-queue.html")
 
 
 @app.get("/create")

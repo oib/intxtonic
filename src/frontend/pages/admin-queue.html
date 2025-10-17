@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>inTXTonic • Translation Queue</title>
+  <link rel="stylesheet" href="/src/frontend/css/base.css">
+  <link rel="stylesheet" href="/src/frontend/css/components.css">
+  <link rel="stylesheet" href="/src/frontend/css/layout.css">
+  <style>
+    .queue-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.95rem;
+    }
+    .queue-table thead {
+      background: rgba(185, 236, 255, 0.08);
+    }
+    .queue-table th,
+    .queue-table td {
+      padding: 8px 12px;
+      text-align: left;
+      border-bottom: 1px solid rgba(185, 236, 255, 0.12);
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+    .queue-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+    .queue-table__summary td {
+      border-bottom: none;
+    }
+    .queue-table__detail-row td {
+      background: rgba(185, 236, 255, 0.04);
+      border-bottom: 1px solid rgba(185, 236, 255, 0.12);
+      padding-top: 6px;
+      padding-bottom: 10px;
+    }
+    .queue-table__mono {
+      font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+      font-size: 0.85rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 200px;
+    }
+    .queue-table__status {
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .queue-empty {
+      padding: 16px 0;
+    }
+    .queue-detail {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 0.85rem;
+      color: var(--tx-1);
+    }
+    .queue-detail span {
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+  <header class="site">
+    <div class="inner container flex ai-c jc-b">
+      <div class="flex ai-c" style="gap:8px">
+        <a class="btn btn--subtle" href="/admin">← Back to admin</a>
+      </div>
+      <nav class="flex ai-c" style="gap:8px">
+        <a id="login-link" class="btn btn--subtle" href="/login">Login</a>
+        <button id="logout-btn" class="btn btn--ghost" style="display:none">Logout</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="row">
+      <div class="col-12">
+        <div class="card">
+          <h1 style="margin:0">Translation Queue</h1>
+          <p class="hint" style="color:var(--tx-1)">Monitor translation and summarization jobs currently waiting or in progress.</p>
+          <div class="flex ai-c" style="gap:8px; flex-wrap:wrap; margin-top:16px">
+            <button id="refresh-btn" class="btn btn--subtle" type="button">Refresh</button>
+            <span id="last-updated" class="hint"></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="row">
+      <div class="col-12">
+        <div class="card">
+          <h2 style="margin:0 0 12px">Queued jobs</h2>
+          <div id="queue-status" class="badge" style="display:none"></div>
+          <table class="queue-table">
+            <thead>
+              <tr>
+                <th style="text-align:left">Queued At</th>
+                <th style="text-align:left">Status</th>
+              </tr>
+            </thead>
+            <tbody id="queue-rows">
+              <tr><td colspan="2"><span class="badge">Loading…</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site">
+    <div class="inner container flex ai-c jc-b">
+      <div><span id="year"></span> inTXTonic</div>
+    </div>
+  </footer>
+
+  <script type="module">
+    import { authHeaders, getToken, clearToken } from '/src/frontend/js/auth.js';
+    import { showToast } from '/src/frontend/js/toast.js';
+
+    const queueRows = document.getElementById('queue-rows');
+    const queueStatus = document.getElementById('queue-status');
+    const refreshBtn = document.getElementById('refresh-btn');
+    const lastUpdatedLabel = document.getElementById('last-updated');
+    const logoutBtn = document.getElementById('logout-btn');
+    const loginLink = document.getElementById('login-link');
+
+    document.getElementById('year').textContent = new Date().getFullYear().toString();
+
+    function formatDate(value){
+      if(!value) return '';
+      try { return new Date(value).toLocaleString(); } catch { return value; }
+    }
+
+    function setQueueStatus(message, tone = 'info'){
+      if(!queueStatus) return;
+      if(!message){ queueStatus.style.display = 'none'; return; }
+      queueStatus.textContent = message;
+      queueStatus.className = tone === 'err' ? 'badge badge--err' : 'badge';
+      queueStatus.style.display = 'inline-block';
+    }
+
+    function shorten(value, length = 12){
+      if(!value) return '';
+      const str = String(value);
+      return str.length <= length ? str : `${str.slice(0, length)}…`;
+    }
+
+    function formatStatus(status){
+      const normalized = (status || '').toString().toLowerCase();
+      switch(normalized){
+        case 'in_progress': return { label: 'In progress', tone: 'warn' };
+        case 'completed': return { label: 'Completed', tone: 'ok' };
+        case 'failed': return { label: 'Failed', tone: 'err' };
+        default: return { label: (status || 'Pending').toString(), tone: 'info' };
+      }
+    }
+
+    function badge(label, tone = 'info'){
+      const className = tone === 'err' ? 'badge badge--err'
+        : tone === 'ok' ? 'badge'
+        : tone === 'warn' ? 'badge badge--warn'
+        : 'badge';
+      return `<span class="${className}">${label}</span>`;
+    }
+
+    async function ensureAdmin(){
+      if(!getToken()){
+        window.location.href = '/login';
+        return false;
+      }
+      try {
+        const res = await fetch('/auth/me', { headers: { ...authHeaders() } });
+        if(!res.ok){
+          window.location.href = '/login';
+          return false;
+        }
+        const user = await res.json();
+        const permitted = !!user.is_admin || (Array.isArray(user.roles) && user.roles.includes('moderator'));
+        if(!permitted){
+          showToast('Admin access required', 'err');
+          window.location.href = '/admin';
+          return false;
+        }
+        loginLink.style.display = 'none';
+        logoutBtn.style.display = 'inline-flex';
+        return true;
+      } catch (err) {
+        console.error('Auth check failed', err);
+        showToast('Unable to verify access', 'err');
+        window.location.href = '/admin';
+        return false;
+      }
+    }
+
+    logoutBtn.addEventListener('click', async () => {
+      try { await fetch('/auth/logout', { method: 'POST', headers: { ...authHeaders() } }); } catch {}
+      clearToken();
+      showToast('Signed out', 'ok');
+      window.location.href = '/';
+    });
+
+    function renderRows(rows){
+      if(!Array.isArray(rows) || !rows.length){
+        queueRows.innerHTML = '<tr><td colspan="2" class="queue-empty"><span class="badge">Queue is empty</span></td></tr>';
+        return;
+      }
+      queueRows.innerHTML = rows.map((job) => {
+        const modeLabel = job.mode || '';
+        const sourceId = job.source_id || '';
+        const sourceLabel = job.source_type ? `${job.source_type}` : '—';
+        const statusInfo = formatStatus(job.status);
+        const chunkCount = job.chunk_count != null ? job.chunk_count : (job.payload?.chunk_count ?? '—');
+        const requestor = job.requested_by ? shorten(job.requested_by, 16) : '—';
+        const jobId = job.job_id || '';
+        const payloadInfo = job.payload && typeof job.payload === 'object' ? JSON.stringify(job.payload) : '';
+        return `
+          <tr class="queue-table__summary">
+            <td>${formatDate(job.queued_at) || '—'}</td>
+            <td class="queue-table__status">${badge(statusInfo.label, statusInfo.tone)}</td>
+          </tr>
+          <tr class="queue-table__detail-row">
+            <td colspan="2">
+              <div class="queue-detail">
+                <span><strong>Job ID:</strong> ${jobId || '—'}</span>
+                <span><strong>Mode:</strong> ${modeLabel || '—'}</span>
+                <span><strong>Target:</strong> ${job.target_lang || '—'}</span>
+                <span><strong>Chunks:</strong> ${chunkCount}</span>
+                <span><strong>Source:</strong> ${sourceLabel} · ${sourceId || '—'}</span>
+                <span><strong>Requested By:</strong> ${job.requested_by || '—'}</span>
+                ${payloadInfo ? `<span title="${payloadInfo}"><strong>Payload:</strong> ${shorten(payloadInfo, 60)}</span>` : ''}
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function loadQueue(){
+      queueRows.innerHTML = '<tr><td colspan="2"><span class="badge">Loading…</span></td></tr>';
+      setQueueStatus('');
+      try {
+        const res = await fetch('/api/admin/queue', { headers: { ...authHeaders() } });
+        if(res.status === 401 || res.status === 403){
+          showToast('Admin access required', 'err');
+          window.location.href = '/admin';
+          return;
+        }
+        if(!res.ok){
+          throw new Error(await res.text());
+        }
+        const data = await res.json();
+        renderRows(data?.jobs || []);
+        if(Array.isArray(data?.jobs) && data.jobs.length){
+          setQueueStatus(`${data.jobs.length} job(s) listed.`);
+        }
+        if(lastUpdatedLabel){
+          const now = new Date();
+          lastUpdatedLabel.textContent = `Last updated ${now.toLocaleTimeString()}`;
+        }
+      } catch (err) {
+        console.error('Failed to load queue', err);
+        queueRows.innerHTML = '<tr><td colspan="8"><span class="badge badge--err">Failed to load queue</span></td></tr>';
+        setQueueStatus('Unable to load queue right now', 'err');
+      }
+    }
+
+    refreshBtn?.addEventListener('click', loadQueue);
+
+    (async () => {
+      const ok = await ensureAdmin();
+      if(ok){
+        await loadQueue();
+      }
+    })();
+  </script>
+</body>
+</html>

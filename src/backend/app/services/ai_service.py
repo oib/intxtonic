@@ -104,6 +104,7 @@ async def translate_text(
         "- Preserve placeholders exactly as-is (e.g., {name}, {count}).",
         "- Do NOT add punctuation that is not present in the source unless required by grammar.",
         "- Do NOT return exactly the same text as the source unless it is a proper noun/brand/acronym or already localized.",
+        "- Translate every word into the target language; only leave source-language words when they are proper nouns, brands, acronyms, or untranslatable placeholders.",
     ]
     if extra_rules:
         rules.append(extra_rules)

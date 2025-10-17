@@ -91,6 +91,28 @@ export async function consumeMagicLink(token){
   return data;
 }
 
+export async function requestPasswordReset(handleOrEmail){
+  const res = await fetch('/auth/request-password-reset', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ handle_or_email: handleOrEmail })
+  });
+  if(!res.ok) throw new Error(await res.text());
+  return res.json().catch(() => ({}));
+}
+
+export async function resetPassword(token, newPassword){
+  const res = await fetch('/auth/reset-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, new_password: newPassword })
+  });
+  if(!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  if(data?.access_token) saveToken(data.access_token);
+  return data;
+}
+
 export async function me(){
   const res = await fetch('/auth/me',{ headers:{ ...authHeaders() } });
   if(!res.ok) throw new Error(await res.text());

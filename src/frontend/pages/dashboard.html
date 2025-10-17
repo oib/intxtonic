@@ -38,9 +38,8 @@
             </div>
           </div>
           <div id="admin-tools" class="flex ai-c mb-6" style="gap:8px; display:none">
-            <input id="new-tag" class="input" placeholder="New tag label" style="max-width:240px">
-            <button id="btn-create-tag" class="btn">Create tag</button>
-            <span class="badge">Tip: Click a tag to toggle ban</span>
+            <a class="btn btn--subtle" href="/admin/tags">Open Tag Management</a>
+            <span class="badge">Tag creation & bans are managed on the admin Tags page.</span>
           </div>
           <div id="tags" class="tags"></div>
           <div class="mt-4" style="font-size:12px; color:var(--tx-1)">Hint: Click tags to filter posts; green = active</div>
@@ -55,7 +54,7 @@
     <section class="row">
       <div class="col-12">
         <div class="card">
-          <div class="flex ai-c jc-b">
+          <div class="flex ai-c">
             <h2 data-i18n="dashboard.latest_posts">Latest Posts</h2> <small id="total" style="font-size:12px; color:var(--tx-1);"></small>
             <div class="flex ai-c" style="gap:8px">
               <label class="flex ai-c" style="gap:6px">
@@ -65,6 +64,7 @@
                   <option value="top">Top</option>
                 </select>
               </label>
+              <button id="toggle-bookmarked" class="btn btn--subtle" type="button" title="Show only your bookmarked posts">Bookmarked</button>
               <input id="q-posts" class="input" placeholder="Search posts..." style="max-width:220px">
               <button id="btn-post-search" class="btn btn--subtle" type="button">Search</button>
               <span class="hide-sm" style="font-size:12px; color:var(--tx-1);">Tip: Combines with tag filters</span>
@@ -148,8 +148,6 @@
         const elSearch = document.getElementById('q');
         const elBtn = document.getElementById('btn-search');
         const elAdmin = document.getElementById('admin-tools');
-        const elNewTag = document.getElementById('new-tag');
-        const elCreateTag = document.getElementById('btn-create-tag');
         let isAdmin = false;
 
         async function loadMe(){
@@ -171,7 +169,10 @@
           elTags.innerHTML = '<div class="badge">Loading…</div>';
           try{
             const url = query ? `/tags?query=${encodeURIComponent(query)}` : '/tags';
-            const res = await fetch(url, { headers:{ ...authHeaders() }});
+            // Abort previous tags request if any
+            try{ tagsAbortCtrl && tagsAbortCtrl.abort(); }catch{}
+            tagsAbortCtrl = new AbortController();
+            const res = await fetch(url, { headers:{ ...authHeaders() }, signal: tagsAbortCtrl.signal });
             if(res.status === 401){
               clearToken();
               window.location.href = '/login';
@@ -180,13 +181,17 @@
             if(!res.ok) throw new Error(await res.text());
             const data = await res.json();
             if(!Array.isArray(data)) throw new Error('Unexpected response');
-            elTags.innerHTML = data.length ? data.map(t => 
+            // Exclude pseudo-tag 'bookmarked' from chips; admins see all other tags
+            const available = data.filter(t => t && t.slug && t.slug !== 'bookmarked' && (isAdmin ? true : !t.is_restricted));
+            elTags.innerHTML = available.length ? available.map(t => 
               `<button class="badge tag${selectedTags.has(t.slug) ? ' badge--ok' : ''}" data-slug="${t.slug}" data-id="${t.id}" data-banned="${t.is_banned}" title="${isAdmin ? (t.is_banned ? `${t.label} — Alt+Click to unban` : `${t.label} — Alt+Click to ban`) : t.label}">${t.label}</button>`
             ).join(' ') : '<div class="badge">No tags</div>';
             elTags.querySelectorAll('button.tag').forEach(btn => {
               btn.addEventListener('click', () => {
                 const slug = btn.getAttribute('data-slug');
                 if(selectedTags.has(slug)) selectedTags.delete(slug); else selectedTags.add(slug);
+                // Turning on any normal tag disables bookmarked-only mode
+                if (bookmarkedOnly) { bookmarkedOnly = false; updateBookmarkedToggle(); }
                 renderFilters();
                 btn.classList.toggle('badge--ok', selectedTags.has(slug));
                 cursor = null;
@@ -212,6 +217,10 @@
               });
             }
           }catch(err){
+            if((err && err.name === 'AbortError') || (err && /AbortError/i.test(err.message||''))){
+              // quietly ignore aborted requests
+              return;
+            }
             elTags.innerHTML = '<div class="badge badge--err">Failed to load tags</div>';
             showToast(t('toast.load_failed'),'err');
           }
@@ -219,28 +228,91 @@
 
         elBtn.addEventListener('click', () => loadTags(elSearch.value));
         elSearch.addEventListener('keydown', (e) => { if(e.key==='Enter'){ loadTags(elSearch.value); }});
-        elCreateTag.addEventListener('click', async () => {
-          if(!isAdmin) return;
-          const label = elNewTag.value.trim();
-          if(!label){ showToast('Enter a tag label','warn'); return; }
-          try{
-            const res = await fetch('/tags', { method:'POST', headers:{ 'Content-Type':'application/json', ...authHeaders() }, body: JSON.stringify({ label }) });
-            if(!res.ok) throw new Error(await res.text());
-            elNewTag.value = '';
-            showToast(t('toast.saved'),'ok');
-            loadTags();
-          }catch(err){ showToast(t('toast.error'),'err'); }
-        });
+
 
         const elPosts = document.getElementById('posts');
         const elSort = document.getElementById('sort');
         const elQPosts = document.getElementById('q-posts');
         const elBtnPostSearch = document.getElementById('btn-post-search');
+        const elToggleBookmarked = document.getElementById('toggle-bookmarked');
         const elLoadingIndicator = document.getElementById('loading-indicator');
         const elTotal = document.getElementById('total');
         let cursor = null;
         let isLoadingMore = false;
         let queryPosts = '';
+        let bookmarkedOnly = false;
+        let tagsAbortCtrl = null;
+        let postsAbortCtrl = null;
+
+        // Simple debounce utility
+        function debounce(fn, wait){
+          let t = null;
+          return (...args) => {
+            if(t) clearTimeout(t);
+            t = setTimeout(() => fn(...args), wait);
+          };
+        }
+
+        function updateBookmarkedToggle(){
+          elToggleBookmarked.classList.toggle('btn--ok', bookmarkedOnly);
+          elToggleBookmarked.classList.toggle('badge--ok', bookmarkedOnly);
+          elToggleBookmarked.setAttribute('aria-pressed', bookmarkedOnly ? 'true' : 'false');
+        }
+
+        function updateUrlFromState(){
+          try{
+            const params = new URLSearchParams();
+            // sort
+            if (elSort && elSort.value && elSort.value !== 'newest') params.set('sort', elSort.value);
+            // search
+            const qval = (queryPosts || '').trim();
+            if (qval) params.set('q', qval);
+            // tags or bookmarked
+            if (bookmarkedOnly){
+              params.append('tag', 'bookmarked');
+            } else if (selectedTags.size){
+              for (const s of selectedTags) params.append('tag', s);
+            }
+            const qs = params.toString();
+            const url = qs ? `?${qs}` : window.location.pathname;
+            window.history.replaceState(null, '', url);
+          }catch{}
+        }
+
+        // Restore saved filters on load (localStorage)
+        try{
+          const savedTags = JSON.parse(localStorage.getItem('ls_selected_tags') || '[]');
+          if (Array.isArray(savedTags)) savedTags.forEach(s => selectedTags.add(s));
+        }catch{}
+        try{
+          const savedQ = localStorage.getItem('ls_query_posts') || '';
+          if (savedQ) { queryPosts = savedQ; const el = document.getElementById('q-posts'); if (el) el.value = savedQ; }
+        }catch{}
+        try{
+          const savedBm = localStorage.getItem('ls_bookmarked_only');
+          bookmarkedOnly = savedBm === '1';
+        }catch{}
+        // Override with URL state if present
+        try{
+          const usp = new URLSearchParams(window.location.search);
+          const urlSort = usp.get('sort');
+          const urlQ = usp.get('q');
+          const urlTags = usp.getAll('tag');
+          if (urlSort && elSort) { elSort.value = urlSort; }
+          if (typeof urlQ === 'string') {
+            queryPosts = urlQ; const el = document.getElementById('q-posts'); if (el) el.value = urlQ;
+          }
+          if (urlTags && urlTags.length){
+            if (urlTags.includes('bookmarked')){
+              bookmarkedOnly = true; selectedTags.clear();
+            } else {
+              selectedTags.clear(); for (const t of urlTags) selectedTags.add(t);
+            }
+          }
+        }catch{}
+        updateBookmarkedToggle();
+        // Reflect initial state into URL (normalize)
+        updateUrlFromState();
 
         function escapeHtml(str){
         if(!str) return '';
@@ -273,8 +345,10 @@
       function renderFilters(){
         const arr = Array.from(selectedTags);
         elFilters.innerHTML = arr.length ? arr.map(s => `<span class="badge anim-in">#${s} <button class="btn btn--ghost rm-filter" data-slug="${s}" title="Remove">×</button></span>`).join(' ') : '';
-        elClearFilters.style.display = arr.length ? 'inline-flex' : 'none';
+        elClearFilters.textContent = arr.length ? `Clear filters (${arr.length})` : 'Clear filters';
+        elClearFilters.style.display = (arr.length || bookmarkedOnly || (queryPosts && queryPosts.trim())) ? 'inline-flex' : 'none';
         try{ localStorage.setItem('ls_selected_tags', JSON.stringify(Array.from(selectedTags))); }catch(e){}
+        updateUrlFromState();
         elFilters.querySelectorAll('button.rm-filter').forEach(btn => {
           btn.addEventListener('click', () => {
             const slug = btn.getAttribute('data-slug');
@@ -297,16 +371,47 @@
           elLoadingIndicator.style.display = 'flex';
         }
         try{
+          // Abort previous posts request if any (for non-append fresh loads)
+          if(!append){ try{ postsAbortCtrl && postsAbortCtrl.abort(); }catch{}; postsAbortCtrl = new AbortController(); }
           const params = new URLSearchParams({ sort: elSort.value });
           if(queryPosts && queryPosts.trim()) params.set('q', queryPosts.trim());
-          for(const s of selectedTags){ params.append('tag', s); }
+          if (bookmarkedOnly) {
+            params.append('tag', 'bookmarked');
+          } else {
+            for(const s of selectedTags){ params.append('tag', s); }
+          }
           if(append && cursor) params.set('cursor', cursor); else params.set('limit', '10');
-          const res = await fetch(`/posts?${params.toString()}`, { headers:{ ...authHeaders() } });
+          const res = await fetch(`/posts?${params.toString()}`, { headers:{ ...authHeaders() }, signal: postsAbortCtrl ? postsAbortCtrl.signal : undefined });
           if(res.status === 401){
             try{ const sentinel = document.getElementById('infinite-sentinel'); sentinel && io.unobserve(sentinel); }catch{}
             clearToken();
             showToast('Session expired. Please sign in again','warn');
             window.location.href = '/login';
+            return;
+          }
+          if(res.status === 403){
+            let removed = [];
+            try{
+              const txt = await res.text();
+              const obj = JSON.parse(txt);
+              const detail = obj && (obj.detail || (obj.error && obj.error.message));
+              if (typeof detail === 'string'){
+                const idx = detail.indexOf(':');
+                const part = idx >= 0 ? detail.slice(idx+1) : detail;
+                removed = part.split(',').map(s => s.trim()).filter(Boolean);
+              }
+            }catch{}
+            if (removed.length){
+              removed.forEach(slug => { if (selectedTags.has(slug)) selectedTags.delete(slug); });
+              renderFilters();
+              showToast(`Removed inaccessible tags: ${removed.join(', ')}`,'warn');
+            } else {
+              // Fallback: clear all filters if we cannot identify which ones
+              selectedTags.clear();
+              renderFilters();
+              showToast('Removed inaccessible tag filters','warn');
+            }
+            elPosts.innerHTML = '<div class="badge badge--warn">Updated filters due to access restrictions.</div>';
             return;
           }
           if(!res.ok) throw new Error(await res.text());
@@ -326,6 +431,24 @@
               elTotal.textContent = '';
             }
           }
+          const emptyMsg = (() => {
+            const hasTags = selectedTags && selectedTags.size > 0;
+            const qval = (queryPosts || '').trim();
+            if (bookmarkedOnly) {
+              return 'You have no bookmarked posts yet. Use the bookmark button on posts to save them.';
+            }
+            if (qval && hasTags) {
+              return `No results for "${qval}" with the selected tags.`;
+            }
+            if (qval) {
+              return `No results for "${qval}".`;
+            }
+            if (hasTags) {
+              return 'No posts match the selected tags.';
+            }
+            return 'No posts yet';
+          })();
+
           const markup = items.length ? items.map(p => `
             <article class="post">
               <h3><a href="/post/${p.id}">${p.title}</a></h3>
@@ -346,7 +469,7 @@
             </article>
           `).join('') : '';
           if(initial || !append) {
-            elPosts.innerHTML = markup || '<div class="badge">No posts yet</div>';
+            elPosts.innerHTML = markup || `<div class="badge">${emptyMsg}</div>`;
           } else {
             elPosts.insertAdjacentHTML('beforeend', markup);
           }
@@ -359,6 +482,10 @@
             if(sentinel) io.observe(sentinel);
           }
         }catch(err){
+          if((err && err.name === 'AbortError') || (err && /AbortError/i.test(err.message||''))){
+            // ignore aborted requests
+            return;
+          }
           console.error(`Error in loadPosts:`, err);
           elPosts.innerHTML = '<div class="badge badge--err">Failed to load posts</div>';
           showToast(t('toast.load_failed'),'err');
@@ -368,20 +495,50 @@
         }
       }
 
-      elSort.addEventListener('change', () => { cursor = null; loadPosts(); });
-      elClearFilters.addEventListener('click', () => { selectedTags.clear(); renderFilters(); cursor = null; loadPosts(); });
+      elSort.addEventListener('change', () => { updateUrlFromState(); cursor = null; loadPosts(); });
+      elToggleBookmarked.addEventListener('click', () => {
+        bookmarkedOnly = !bookmarkedOnly;
+        if (bookmarkedOnly && selectedTags.size){ selectedTags.clear(); renderFilters(); }
+        updateBookmarkedToggle();
+        try{ localStorage.setItem('ls_bookmarked_only', bookmarkedOnly ? '1' : '0'); }catch{}
+        updateUrlFromState();
+        cursor = null; loadPosts();
+      });
+      elClearFilters.addEventListener('click', () => {
+        selectedTags.clear();
+        bookmarkedOnly = false; updateBookmarkedToggle();
+        try{ localStorage.setItem('ls_bookmarked_only', '0'); }catch{}
+        renderFilters(); updateUrlFromState(); cursor = null; loadPosts();
+      });
       elBtnPostSearch.addEventListener('click', () => {
         queryPosts = elQPosts.value || '';
         try{ localStorage.setItem('ls_query_posts', queryPosts); }catch(e){}
+        updateUrlFromState();
         cursor = null; loadPosts();
       });
       elQPosts.addEventListener('keydown', (e) => {
         if(e.key==='Enter'){
           queryPosts = elQPosts.value || '';
           try{ localStorage.setItem('ls_query_posts', queryPosts); }catch(e){}
+          updateUrlFromState();
           cursor = null; loadPosts();
         }
       });
+      // Debounced input for tag search and post search
+      const elTagsSearch = document.getElementById('q');
+      if (elTagsSearch){
+        const debouncedTagSearch = debounce(() => loadTags(elTagsSearch.value || ''), 300);
+        elTagsSearch.addEventListener('input', debouncedTagSearch);
+      }
+      if (elQPosts){
+        const debouncedPostSearch = debounce(() => {
+          queryPosts = elQPosts.value || '';
+          try{ localStorage.setItem('ls_query_posts', queryPosts); }catch(e){}
+          updateUrlFromState();
+          cursor = null; loadPosts();
+        }, 350);
+        elQPosts.addEventListener('input', debouncedPostSearch);
+      }
 
       const io = new IntersectionObserver((entries) => {
         if (entries[0].isIntersecting && !isLoadingMore && cursor !== null) {

@@ -113,6 +113,8 @@
           const btnPrevPage = document.getElementById('btn-prev-page');
           const btnNextPage = document.getElementById('btn-next-page');
           const userCount = document.getElementById('user-count');
+          const logoutBtn = document.getElementById('logout-btn');
+          const loginLink = document.getElementById('login-link');
 
           const assignPanel = document.getElementById('assignment-panel');
           const assignForm = document.getElementById('assign-form');
@@ -439,7 +441,27 @@
         }
       });
 
+      if (logoutBtn) {
+        logoutBtn.addEventListener('click', async () => {
+          try {
+            await fetch('/auth/logout', { method: 'POST', headers: { ...authHeaders() } });
+          } catch (err) {
+            console.error('logout failed', err);
+          }
+          clearToken();
+          showToast('Signed out', 'ok');
+          window.location.href = '/';
+        });
+      }
+
+      function updateAuthControls() {
+        const hasToken = !!getToken();
+        if (loginLink) loginLink.style.display = hasToken ? 'none' : 'inline-flex';
+        if (logoutBtn) logoutBtn.style.display = hasToken ? 'inline-flex' : 'none';
+      }
+
           refreshAuthUI();
+          updateAuthControls();
           const ok = await checkAdminAccess();
           if(!ok) return;
           await loadTags();

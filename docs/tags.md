@@ -26,6 +26,27 @@
 - `GET /tags/visibility/users/{handle}`: Admin-only lookup of tags assigned to a specific user.
 - `POST /tags/{id}/visibility/users`: Admin-only assignment of a restricted tag to a user (`app.tag_visibility.account_id`).
 - `DELETE /tags/{id}/visibility/users/{handle}`: Admin-only removal of a user assignment.
+- **Admin UI route**: `/admin/tags` renders `src/frontend/pages/admin-tags.html`, exposing Tag Management (create tag, review admin/user groups, manage visibility). The `/admin` landing page now links out to this dedicated view and no longer embeds tag creation controls.
+
+## Dashboard Tag Filter Wiring
+- **Frontend entrypoint**: `src/frontend/pages/dashboard.html` registers event handlers when the page loads and immediately invokes `loadTags()` and `loadPosts()`.
+- **Tag chips**: `loadTags()` fetches `GET /tags` (or `GET /tags?query=` when searching) with auth headers. It excludes pseudo-tag `bookmarked` and, for non-admins, filters out restricted tags, mirroring backend visibility rules. Each chip toggles membership in the `selectedTags` set and triggers `loadPosts()`.
+- **Admin helpers**: When the viewer is an admin, holding <kbd>Alt</kbd> and clicking a chip executes `POST /tags/{id}/ban` or `/tags/{id}/unban`. The inline "Create tag" form sends `POST /tags` and refreshes the list.
+- **URL/state sync**: `renderFilters()` updates the badge list, persists state to `localStorage`, and calls `updateUrlFromState()`, which rewrites the query string (`?tag=slug&tag=other`) so deep links like `dashboard.html?tag=foo` restore filters. The special bookmarked toggle stores `tag=bookmarked` and clears normal tags.
+- **Post results**: `loadPosts()` builds a `URLSearchParams` payload with repeated `tag` keys (or the `bookmarked` sentinel) plus search/sort options, then calls `GET /posts?...`. The response `items[i].tags` array is rendered as `.chip-tag` buttons that, when clicked, replace the current filter with that slug and reload both tags and posts.
+- **Response schema guard**: Tag-filtered queries now reuse the same column order as other `/posts` branches (`src/backend/app/api/posts.py`), ensuring `author`, `tags`, and `highlight` serialize correctly so filters remain functional.
+- **Permissions feedback**: If `/posts` returns `403` listing inaccessible tags, the handler prunes those slugs from `selectedTags`, re-renders filters, and surfaces a warning badge so users understand why filters disappeared.
+- **Database lookups**: The `/tags` handler in `src/backend/app/api/tags.py` executes a SELECT on `app.tags`, applying optional `ILIKE` queries plus `build_access_clause()` joins to `app.tag_visibility` for restricted tags. The `/posts` handler in `src/backend/app/api/posts.py` branches its SQL: bookmarked feeds join `app.bookmarks`, tag-filtered feeds join `app.post_tags`/`app.tags` with `HAVING COUNT(DISTINCT t.slug)`, and the default feed enforces visibility with a `NOT EXISTS` subquery so restricted tags without access are excluded. Each branch wraps results with `json_agg` to emit per-post tag objects.
+
+## Tag Detail Page (`/tags/{slug}`)
+- **Routing**: `src/backend/app/main.py` serves the clean URL `/tags/{slug}` by returning the static `src/frontend/pages/tags.html` template. There is no dedicated REST endpoint; the page bootstraps itself via client-side JavaScript.
+- **Frontend flow**: `tags.html` parses the slug from `location.pathname`, enforces auth (redirects guests to `/login`), and calls `GET /posts?tag={slug}` with pagination and sort parameters to load the feed. Additional posts are fetched by incrementing `offset` and repeating the same request.
+- **Database queries**: Because the page reuses `GET /posts`, it hits the tag-filtered branch in `list_posts()` (see `src/backend/app/api/posts.py`). That branch joins `app.post_tags` to `app.tags` with `JOIN` filters, constrains `t.slug = ANY(%s::text[])`, and uses `HAVING COUNT(DISTINCT t.slug) = %s` to ensure all requested slugs match. Visibility guards reuse `build_access_clause()` so restricted tags without access raise a `403`, mirroring dashboard behavior.
+
+## Permission Differences
+- **Admins**: `list_tags()` skips `build_access_clause()` for admins so `/tags` returns restricted and banned tags, enabling the dashboard to surface every tag (`src/backend/app/api/tags.py`). Admins manage creation/ban actions exclusively through `/admin/tags`; dashboard chips still support Alt+Click ban/unban shortcuts via `/tags/{id}/ban|unban`.
+- **Regular users**: Non-admin calls to `/tags` apply `build_access_clause()`, limiting results to unrestricted tags plus those explicitly granted (`app.tag_visibility`). When `/posts` executes, the tag-filtered branch adds the access clause and can respond `403` if a selected tag is inaccessible; the dashboard catches this and removes the offending slugs (`src/backend/app/api/posts.py`, `dashboard.html`).
+- **Guests**: Without a token, both `dashboard.html` and `tags.html` redirect to `/login` before fetching data. Backend endpoints such as `/posts` require `get_current_account_id`, so unauthenticated requests are rejected with `401`.
 
 ## Database Structures
 - **`app.tags`**: Stores tag metadata and flags (`is_banned`, `is_restricted`).
@@ -42,3 +63,4 @@
 - **Assigning roles**: Prefer role assignments when multiple users need the same restricted tag access.
 - **Auditing access**: Use `GET /tags/visibility` (global) and `GET /tags/visibility/users/{handle}` (per-user) to verify assignments.
 - **Managing bans**: Banned tags remain in the database for history but should not appear publicly until unbanned.
+- **Admin vs post tagging**: Only tags created through `/admin/tags` (Tag Management > Create tag) are flagged `created_by_admin`. Tags added inline while authoring posts—whether by admins or other users—are treated as user-created and appear under the "User-created tags" list in `admin-tags.html`.

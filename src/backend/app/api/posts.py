@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from ..core.db import get_pool
 from ..core.config import get_settings
 from ..core.deps import get_current_account_id, require_role, require_admin, is_admin_account
+from ..core.tag_access import build_access_clause, fetch_accessible_tag_sets, tag_visibility_available
 from ..core.notify import publish
 from .auth import csrf_validate
 import logging
@@ -75,7 +76,18 @@ async def list_posts(
     account_id: str = Depends(get_current_account_id),
     pool = Depends(get_pool),
 ):
-    logger.info(f"List posts request: limit={limit}, offset={offset}, cursor={cursor}, sort={sort}, tag={tag}, q={q}, account_id={account_id}")
+    logger.info(
+        "List posts request",
+        extra={
+            "limit": limit,
+            "offset": offset,
+            "cursor": cursor,
+            "sort": sort,
+            "tags": tag,
+            "query": q,
+            "account_id": account_id,
+        },
+    )
     
     # Validate/normalize cursor if provided; be lenient and ignore invalid
     if cursor:
@@ -113,19 +125,38 @@ async def list_posts(
         count_search_condition = f" AND {search_vector} @@ plainto_tsquery('simple', %s)"
         cursor = None  # disable cursor pagination when searching
 
-    if tag:
+    tag_alias = "t"
+    tag_list: Optional[list[str]] = None
+    original_tags = list(tag or [])
+    has_bookmarked_filter = False
+    if original_tags:
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for slug in original_tags:
+            if slug == "bookmarked":
+                has_bookmarked_filter = True
+                continue
+            if slug in seen:
+                continue
+            seen.add(slug)
+            cleaned.append(slug)
+        if cleaned:
+            tag_list = cleaned
+
+    # Skip pre-validation of tag slugs; unknown tags will simply yield 0 results in the main query
+
+    # Admins can see all tags; only enforce visibility for non-admins when enabled
+    is_admin = await is_admin_account(pool, account_id)
+    visibility_enabled = await tag_visibility_available(pool)
+    if tag_list and (not is_admin) and visibility_enabled:
         try:
-            async with pool.connection() as conn:
-                async with conn.cursor() as cur:
-                    await cur.execute("SELECT slug FROM app.tags WHERE slug = ANY(%s)", (tag,))
-                    existing_tags = [row[0] for row in await cur.fetchall()]
-                    missing_tags = set(tag) - set(existing_tags)
-                    if missing_tags:
-                        logger.warning(f"Tag(s) not found: {missing_tags}")
-                        raise HTTPException(status_code=404, detail=f"Tag(s) not found: {', '.join(missing_tags)}")
+            _, accessible_slugs = await fetch_accessible_tag_sets(pool, account_id)
         except Exception as e:
-            logger.error(f"Error validating tags: {str(e)}")
-            raise HTTPException(status_code=500, detail="Tag validation failed")
+            logger.exception("Failed to fetch accessible tags", extra={"account_id": account_id})
+            raise HTTPException(status_code=500, detail="Unable to verify tag permissions")
+        inaccessible = [slug for slug in tag_list if slug not in accessible_slugs]
+        if inaccessible:
+            raise HTTPException(status_code=403, detail=f"Tag access forbidden: {', '.join(inaccessible)}")
 
     order_clause = "p.created_at DESC"
     if sort == "top":
@@ -138,11 +169,59 @@ async def list_posts(
     if cursor and not offset:
         cursor_condition = " AND p.created_at < %s::timestamptz"
 
+    if is_admin or not visibility_enabled:
+        access_clause_tag, access_params_tag = "TRUE", []
+        access_clause_any, access_params_any = "TRUE", []
+    else:
+        access_clause_tag, access_params_tag = build_access_clause(tag_alias, account_id)
+        access_clause_any, access_params_any = build_access_clause("t2", account_id)
+
     try:
-        if tag:
+        if has_bookmarked_filter and not tag_list:
             sql = f"""
               SELECT p.id, p.title, p.body_md, p.lang, p.visibility, p.score, p.reply_count,
-                     p.created_at, p.author_id, a.handle AS author,
+                     p.created_at, a.handle AS author,
+                     '[]'::jsonb AS tags,
+                     {highlight_select},
+                     {rank_select}
+              FROM app.bookmarks b
+              JOIN app.posts p ON p.id = b.target_id
+              LEFT JOIN app.accounts a ON a.id = p.author_id
+              WHERE b.account_id = %s AND b.target_type = 'post' AND p.deleted_at IS NULL
+              {search_condition}
+              {cursor_condition}
+              ORDER BY {order_clause}
+              LIMIT %s OFFSET %s
+            """
+
+            if search_query:
+                params.append(search_query)  # for highlight_select
+                params.append(search_query)  # for rank_select
+            params.append(account_id)       # for b.account_id = %s
+            if search_query:
+                params.append(search_query)  # for search_condition
+            if cursor and not offset:
+                params.append(cursor)
+                offset_to_use = 0
+            else:
+                offset_to_use = offset
+            params.extend([limit, offset_to_use])
+
+            count_sql = f"""
+              SELECT COUNT(*)
+              FROM app.bookmarks b
+              JOIN app.posts p ON p.id = b.target_id
+              WHERE b.account_id = %s AND b.target_type = 'post' AND p.deleted_at IS NULL
+              {count_search_condition}
+            """
+            count_params = [account_id]
+            if search_query:
+                count_params.append(search_query)
+
+        elif tag_list:
+            sql = f"""
+              SELECT p.id, p.title, p.body_md, p.lang, p.visibility, p.score, p.reply_count,
+                     p.created_at, a.handle AS author,
                      COALESCE(
                        json_agg(DISTINCT jsonb_build_object('id', t.id, 'slug', t.slug, 'label', t.label))
                        FILTER (WHERE t.id IS NOT NULL), '[]') AS tags,
@@ -154,24 +233,28 @@ async def list_posts(
               JOIN app.tags t ON t.id = pt.tag_id
               WHERE p.deleted_at IS NULL AND t.slug = ANY(%s::text[])
               {search_condition}
+              AND {access_clause_tag}
               {cursor_condition}
-              GROUP BY p.id, p.title, p.body_md, p.lang, p.visibility, p.score, p.reply_count, p.created_at, p.author_id, a.handle
+              GROUP BY p.id, p.title, p.body_md, p.lang, p.visibility, p.score, p.reply_count, p.created_at, a.handle
               HAVING COUNT(DISTINCT t.slug) = %s
               ORDER BY {order_clause}
               LIMIT %s OFFSET %s
             """
 
             if search_query:
-                params.extend([search_query, search_query])
-            params.append(tag)
+                params.append(search_query)  # for highlight_select
+                params.append(search_query)  # for rank_select
+            params.append(list(tag_list))
             if search_query:
                 params.append(search_query)
+            params.extend(access_params_tag)
             if cursor and not offset:
                 params.append(cursor)
                 offset_to_use = 0
             else:
                 offset_to_use = offset
-            params.extend([len(tag), limit, offset_to_use])
+            params.append(len(tag_list))
+            params.extend([limit, offset_to_use])
 
             count_sql = f"""
               SELECT COUNT(*) FROM (
@@ -181,14 +264,16 @@ async def list_posts(
                 JOIN app.tags t ON t.id = pt.tag_id
                 WHERE p.deleted_at IS NULL AND t.slug = ANY(%s::text[])
                 {count_search_condition}
+                AND {access_clause_tag}
                 GROUP BY p.id
                 HAVING COUNT(DISTINCT t.slug) = %s
               ) x
             """
-            count_params = [tag]
+            count_params = [list(tag_list)]
             if search_query:
                 count_params.append(search_query)
-            count_params.append(len(tag))
+            count_params.extend(access_params_tag)
+            count_params.append(len(tag_list))
         else:
             sql = f"""
               SELECT p.id, p.title, p.body_md, p.lang, p.visibility, p.score, p.reply_count,
@@ -204,6 +289,13 @@ async def list_posts(
               LEFT JOIN app.tags t ON t.id = pt.tag_id
               WHERE p.deleted_at IS NULL
               {search_condition}
+              AND (
+                NOT EXISTS (
+                  SELECT 1 FROM app.post_tags pt2
+                  JOIN app.tags t2 ON t2.id = pt2.tag_id
+                  WHERE pt2.post_id = p.id AND NOT ({access_clause_any})
+                )
+              )
               {cursor_condition}
               GROUP BY p.id, p.title, p.body_md, p.lang, p.visibility, p.score, p.reply_count, p.created_at, a.handle
               ORDER BY {order_clause}
@@ -213,6 +305,7 @@ async def list_posts(
             if search_query:
                 params.extend([search_query, search_query])
                 params.append(search_query)
+                params.extend(access_params_any)
                 if cursor and not offset:
                     params.append(cursor)
                     offset_to_use = 0
@@ -220,6 +313,7 @@ async def list_posts(
                     offset_to_use = offset
                 params.extend([limit, offset_to_use])
             else:
+                params.extend(access_params_any)
                 if cursor and not offset:
                     params.append(cursor)
                     offset_to_use = 0
@@ -233,12 +327,20 @@ async def list_posts(
                 FROM app.posts p
                 WHERE p.deleted_at IS NULL
                 {count_search_condition}
+                AND (
+                  NOT EXISTS (
+                    SELECT 1 FROM app.post_tags pt2
+                    JOIN app.tags t2 ON t2.id = pt2.tag_id
+                    WHERE pt2.post_id = p.id AND NOT ({access_clause_any})
+                  )
+                )
                 GROUP BY p.id
               ) x
             """
             count_params = []
             if search_query:
                 count_params.append(search_query)
+            count_params.extend(access_params_any)
 
         async with pool.connection() as conn:
             async with conn.cursor() as cur:
@@ -327,6 +429,8 @@ async def create_post(body: PostCreateIn, account_id: str = Depends(get_current_
     text = (body.body_md or "").strip()
     if not title or not text:
         raise HTTPException(status_code=400, detail="title and body_md required")
+    if len(text) > 1200:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Post body too long (max 1200 characters)")
     if body.visibility not in ("logged_in", "private", "unlisted"):
         raise HTTPException(status_code=422, detail="invalid visibility")
 
@@ -411,6 +515,10 @@ async def delete_post(post_id: str, account_id: str = Depends(get_current_accoun
                 "UPDATE app.posts SET deleted_at = now() WHERE id=%s",
                 (post_id,),
             )
+            await cur.execute(
+                "DELETE FROM app.translations WHERE source_type = 'post' AND source_id = %s",
+                (post_id,),
+            )
     return OkOut()
 
 
@@ -419,7 +527,7 @@ async def delete_reply(reply_id: str, account_id: str = Depends(get_current_acco
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
-                "SELECT author_id FROM app.replies WHERE id=%s AND deleted_at IS NULL",
+                "SELECT author_id, post_id FROM app.replies WHERE id=%s AND deleted_at IS NULL",
                 (reply_id,),
             )
             row = await cur.fetchone()
@@ -430,6 +538,10 @@ async def delete_reply(reply_id: str, account_id: str = Depends(get_current_acco
                 raise HTTPException(status_code=403, detail="Not allowed to delete this reply")
             await cur.execute(
                 "UPDATE app.replies SET deleted_at = now() WHERE id=%s",
+                (reply_id,),
+            )
+            await cur.execute(
+                "DELETE FROM app.translations WHERE source_type = 'reply' AND source_id = %s",
                 (reply_id,),
             )
     return OkOut()
@@ -726,20 +838,42 @@ async def detach_tag(
 
 @router.get("/{post_id}", response_model=PostOut)
 async def get_post(post_id: str, account_id: str = Depends(get_current_account_id), pool = Depends(get_pool)):
-    sql = """
-      SELECT p.id, p.title, p.body_md, p.lang, p.visibility, p.score, p.reply_count,
-             p.created_at, p.author_id, a.handle AS author
-      FROM app.posts p
-      LEFT JOIN app.accounts a ON a.id = p.author_id
-      WHERE p.id = %s AND p.deleted_at IS NULL
-      LIMIT 1
-    """
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
-            await cur.execute(sql, (post_id,))
+            await cur.execute(
+                """
+                SELECT p.id, p.title, p.body_md, p.lang, p.visibility, p.score, p.reply_count,
+                       p.created_at, p.author_id, a.handle AS author
+                FROM app.posts p
+                LEFT JOIN app.accounts a ON a.id = p.author_id
+                WHERE p.id = %s AND p.deleted_at IS NULL
+                LIMIT 1
+                """,
+                (post_id,),
+            )
             row = await cur.fetchone()
             if not row:
                 raise HTTPException(status_code=404, detail="Post not found")
+
+            # Ensure viewer has access to all tags attached to this post
+            await cur.execute(
+                """
+                SELECT t.id, t.slug
+                FROM app.post_tags pt
+                JOIN app.tags t ON t.id = pt.tag_id
+                WHERE pt.post_id = %s
+                """,
+                (post_id,),
+            )
+            tags = await cur.fetchall()
+
+    if tags:
+        _, accessible_slugs = await fetch_accessible_tag_sets(pool, account_id)
+        for tag_row in tags:
+            tag_slug = tag_row[1]
+            if tag_slug and tag_slug.lower() not in {slug.lower() for slug in accessible_slugs}:
+                raise HTTPException(status_code=403, detail="Forbidden")
+
     return {
         "id": str(row[0]),
         "title": row[1],

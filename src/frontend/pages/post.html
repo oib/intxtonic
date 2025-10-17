@@ -230,6 +230,13 @@
           initBookmarkToggles(bookmarkBtn.parentElement);
         }
         b.innerHTML = renderMarkdownSafe(p.body_md || '');
+        const tagContainer = document.getElementById('post-tags-public');
+        if (tagContainer && Array.isArray(p.tags)) {
+          const allowedTags = p.tags.filter(tag => !tag.is_restricted);
+          tagContainer.innerHTML = allowedTags.length
+            ? allowedTags.map(tag => `<span class="badge">#${tag.slug}</span>`).join(' ')
+            : '';
+        }
         const scoreEl = document.getElementById('post-score');
         if(scoreEl) scoreEl.textContent = String(p.score ?? 0);
         window.__currentPostAuthorId = p.author_id || null;

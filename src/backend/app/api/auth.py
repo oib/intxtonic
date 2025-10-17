@@ -23,6 +23,8 @@ CONFIRM_TOKEN_TTL = timedelta(hours=24)
 RESEND_TOKEN_INTERVAL = timedelta(minutes=5)
 MAGIC_TOKEN_TTL = timedelta(minutes=30)
 MAGIC_TOKEN_INTERVAL = timedelta(minutes=5)
+PASSWORD_RESET_TTL = timedelta(hours=1)
+PASSWORD_RESET_INTERVAL = timedelta(minutes=10)
 
 
 def _now() -> datetime:
@@ -57,6 +59,19 @@ async def _send_magic_login_email(handle: str, email: str, token: str) -> None:
         "If you did not request this link, you can ignore this email."
     )
     await send_email("Your inTXTonic magic login link", body, [email])
+
+
+async def _send_password_reset_email(handle: str, email: str, token: str) -> None:
+    settings = get_settings()
+    base_url = settings.frontend_base_url.rstrip('/') if settings.frontend_base_url else ""
+    link = f"{base_url}/reset-password?token={token}"
+    body = (
+        f"Hi {handle},\n\n"
+        "You requested to reset your inTXTonic password. Use the link below to set a new password.\n"
+        f"{link}\n\n"
+        "If you did not request a password reset, you can safely ignore this email."
+    )
+    await send_email("Reset your inTXTonic password", body, [email])
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -117,6 +132,19 @@ class MagicLinkRequestOut(BaseModel):
 
 class MagicLinkConsumeIn(BaseModel):
     token: str
+
+
+class PasswordResetRequestIn(BaseModel):
+    handle_or_email: str
+
+
+class PasswordResetRequestOut(BaseModel):
+    ok: bool = True
+
+
+class PasswordResetConfirmIn(BaseModel):
+    token: str
+    new_password: str
 
 
 async def _record_resend(redis, email: str) -> None:
@@ -248,6 +276,121 @@ async def resend_confirmation(request: Request, account_id: str = Depends(get_cu
         logger.exception("Failed to resend confirmation email", exc_info=exc)
         raise HTTPException(status_code=500, detail="Unable to send confirmation email")
     return ResendConfirmationOut(ok=True, email=email, sent_at=now.isoformat())
+
+
+@router.post("/register", response_model=TokenOut)
+async def register(body: RegisterIn, request: Request, response: Response, pool = Depends(get_pool)):
+    handle_raw = (body.handle or "").strip()
+    if not handle_raw:
+        raise HTTPException(status_code=422, detail="handle required")
+    handle = handle_raw
+
+    password = body.password or ""
+    if len(password) < 8:
+        raise HTTPException(status_code=422, detail="password must be at least 8 characters long")
+
+    email_value: Optional[str] = None
+    if body.email:
+        email_candidate = str(body.email).strip()
+        if email_candidate:
+            email_value = email_candidate
+
+    async with pool.connection() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                """
+                SELECT 1
+                FROM app.accounts
+                WHERE lower(handle)=lower(%s)
+                  AND deleted_at IS NULL
+                LIMIT 1
+                """,
+                (handle,),
+            )
+            if await cur.fetchone():
+                raise HTTPException(status_code=409, detail="handle already taken")
+
+            if email_value:
+                await cur.execute(
+                    """
+                    SELECT 1
+                    FROM app.accounts
+                    WHERE lower(email)=lower(%s)
+                      AND deleted_at IS NULL
+                    LIMIT 1
+                    """,
+                    (email_value,),
+                )
+                if await cur.fetchone():
+                    raise HTTPException(status_code=409, detail="email already registered")
+
+            pw_hash = hash_password(password)
+            now = _now()
+            token_plain: Optional[str] = None
+            token_hash: Optional[str] = None
+            token_expires: Optional[datetime] = None
+            sent_at: Optional[datetime] = None
+            if email_value:
+                token_plain = secrets.token_urlsafe(32)
+                token_hash = _hash_token(token_plain)
+                token_expires = now + CONFIRM_TOKEN_TTL
+                sent_at = now
+
+            await cur.execute(
+                """
+                INSERT INTO app.accounts (
+                    handle,
+                    display_name,
+                    email,
+                    password_hash,
+                    email_confirmation_token,
+                    email_confirmation_token_expires,
+                    email_confirmation_sent_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+                """,
+                (
+                    handle,
+                    handle,
+                    email_value,
+                    pw_hash,
+                    token_hash,
+                    token_expires,
+                    sent_at,
+                ),
+            )
+            row = await cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=500, detail="failed to create account")
+            account_id = str(row[0])
+
+    if email_value and token_plain:
+        try:
+            await _send_confirmation_email(handle, email_value, token_plain)
+        except Exception as exc:
+            logger.exception("Failed to send confirmation email", exc_info=exc)
+
+    token = create_access_token(subject=account_id)
+    is_https = (request.url.scheme.lower() == "https")
+    response.set_cookie(
+        key="access_token",
+        value=f"Bearer {token}",
+        httponly=True,
+        secure=is_https,
+        samesite="strict",
+        max_age=60 * 60 * 24 * 7,
+    )
+    csrf_token = secrets.token_urlsafe(32)
+    response.set_cookie(
+        key="csrf_token",
+        value=csrf_token,
+        httponly=False,
+        secure=is_https,
+        samesite="strict",
+        max_age=60 * 60,
+    )
+    return TokenOut(access_token=token, account_id=account_id, csrf_token=csrf_token)
 
 
 @router.post("/request-magic-link", response_model=MagicLinkRequestOut)
