@@ -154,7 +154,10 @@
     import { ensureNotifyPermission, notify } from '/src/frontend/js/notify.js';
     import { t, setLanguage } from '/src/frontend/js/i18n-runtime.js';
 
-    document.getElementById('year').textContent = new Date().getFullYear().toString();
+    const yearEl = document.getElementById('year');
+    if (yearEl) {
+      yearEl.textContent = new Date().getFullYear().toString();
+    }
 
     // Guard for authentication
     if(!getToken()){

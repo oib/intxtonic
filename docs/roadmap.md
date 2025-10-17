@@ -62,6 +62,7 @@
 - GitHub Actions workflow with Postgres service, schema + seeds apply, and test execution
 ### ⚙️ Deployment & Development Tooling
 - User-level systemd unit template `dev/templates/langsum-gunicorn.user.service`
+- User-level systemd units for FastAPI (`intxtonic.service`) and the translation worker (`intxtonic-translation-worker.service`) with journald logging guidance
 - Dev runner script `dev/scripts/dev_run.sh`
 - Makefile targets for venv, install, schema apply, seeds, dev, test, ci
 - README covering setup and tag filtering/management workflows
