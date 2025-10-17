@@ -57,8 +57,8 @@
 
   <footer class="site">
     <div class="inner container flex ai-c jc-b">
-      <div> <span id="year"></span> inTXTonic</div>
-      <div class="hide-sm">Built with Windsurf guidelines</div>
+      <div>&copy; <a href="https://bubuit.net/" class="link">bubuit.net</a></div>
+      <div class="hide-sm">Built with <a href="https://windsurf.com/refer?referral_code=4j75hl1x7ibz3yj8" class="link">Windsurf</a> guidelines</div>
     </div>
   </footer>
 
@@ -66,8 +66,6 @@
     import { authHeaders, getToken, clearToken } from '/src/frontend/js/auth.js';
     import { showToast } from '/src/frontend/js/toast.js';
     import { t } from '/src/frontend/js/i18n-runtime.js';
-
-    document.getElementById('year').textContent = new Date().getFullYear().toString();
 
     const logoutBtn = document.getElementById('logout-btn');
     const profileLink = document.getElementById('profile-link');

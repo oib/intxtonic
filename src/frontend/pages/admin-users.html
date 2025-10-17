@@ -355,6 +355,7 @@
               <button class="btn btn--ghost" data-tag-id="${item.tag_id}">Remove</button>
             </div>
           `).join('') : '<div class="badge">No tag overrides</div>';
+          html += '<div class="hide-sm">Built with <a href="https://windsurf.com/refer?referral_code=4j75hl1x7ibz3yj8" class="link">Windsurf</a> guidelines</div>';
           userTagList.innerHTML = html;
           await loadTags(true);
           assignPanel.style.display = 'block';
