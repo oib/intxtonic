@@ -38,9 +38,35 @@
         <div class="card">
           <h1 data-i18n="admin.i18n">Translations</h1>
           <div class="flex ai-c" style="gap:8px; flex-wrap:wrap">
-            <label class="flex ai-c" style="gap:6px">
-              <span>Locale</span>
-              <select id="locale" class="input" style="max-width:160px"></select>
+            <label class="flex ai-c" style="gap:8px; flex-wrap:wrap">
+              <span data-i18n="settings.locale_label">Default language</span>
+              <select id="locale" class="input" style="max-width:220px">
+                <option value="" data-i18n="settings.locale_option_auto">Auto (unset)</option>
+                <option value="bg">Български (Bulgarian)</option>
+                <option value="hr">Hrvatski (Croatian)</option>
+                <option value="cs">Čeština (Czech)</option>
+                <option value="da">Dansk (Danish)</option>
+                <option value="nl">Nederlands (Dutch)</option>
+                <option value="en">English</option>
+                <option value="et">Eesti (Estonian)</option>
+                <option value="fi">Suomi (Finnish)</option>
+                <option value="fr">Français (French)</option>
+                <option value="de">Deutsch (German)</option>
+                <option value="el">Ελληνικά (Greek)</option>
+                <option value="hu">Magyar (Hungarian)</option>
+                <option value="ga">Gaeilge (Irish)</option>
+                <option value="it">Italiano (Italian)</option>
+                <option value="lv">Latviešu (Latvian)</option>
+                <option value="lt">Lietuvių (Lithuanian)</option>
+                <option value="mt">Malti (Maltese)</option>
+                <option value="pl">Polski (Polish)</option>
+                <option value="pt">Português (Portuguese)</option>
+                <option value="ro">Română (Romanian)</option>
+                <option value="sk">Slovenčina (Slovak)</option>
+                <option value="sl">Slovenščina (Slovenian)</option>
+                <option value="es">Español (Spanish)</option>
+                <option value="sv">Svenska (Swedish)</option>
+              </select>
             </label>
             <button id="btn-import" class="btn btn--subtle">Import Missing</button>
             <button id="btn-translate" class="btn btn--subtle">Batch Translate</button>
@@ -87,10 +113,12 @@
   <script type="module">
     import { authHeaders, getToken, clearToken } from '/src/frontend/js/auth.js';
     import { showToast } from '/src/frontend/js/toast.js';
-    import { initLanguageSwitcher } from '/src/frontend/js/i18n-ui.js';
     import { t } from '/src/frontend/js/i18n-runtime.js';
 
-    document.getElementById('year').textContent = new Date().getFullYear().toString();
+    const yearEl = document.getElementById('year');
+    if (yearEl) {
+      yearEl.textContent = new Date().getFullYear().toString();
+    }
     // No navbar language selector on this page
 
     // Auth guard
@@ -138,49 +166,27 @@
     elDebugToggle.addEventListener('change', () => { debugEnabled = !!elDebugToggle.checked; renderDebug(); });
     elClearDebug.addEventListener('click', () => { debugEntries.splice(0, debugEntries.length); renderDebug(); });
 
-    const EU_LOCALES = [
-      { code: 'bg', label: 'Bulgarian (bg)' },
-      { code: 'hr', label: 'Croatian (hr)' },
-      { code: 'cs', label: 'Czech (cs)' },
-      { code: 'da', label: 'Danish (da)' },
-      { code: 'nl', label: 'Dutch (nl)' },
-      { code: 'en', label: 'English (en)' },
-      { code: 'et', label: 'Estonian (et)' },
-      { code: 'fi', label: 'Finnish (fi)' },
-      { code: 'fr', label: 'French (fr)' },
-      { code: 'de', label: 'German (de)' },
-      { code: 'el', label: 'Greek (el)' },
-      { code: 'hu', label: 'Hungarian (hu)' },
-      { code: 'ga', label: 'Irish (ga)' },
-      { code: 'it', label: 'Italian (it)' },
-      { code: 'lv', label: 'Latvian (lv)' },
-      { code: 'lt', label: 'Lithuanian (lt)' },
-      { code: 'mt', label: 'Maltese (mt)' },
-      { code: 'pl', label: 'Polish (pl)' },
-      { code: 'pt', label: 'Portuguese (pt)' },
-      { code: 'ro', label: 'Romanian (ro)' },
-      { code: 'sk', label: 'Slovak (sk)' },
-      { code: 'sl', label: 'Slovenian (sl)' },
-      { code: 'es', label: 'Spanish (es)' },
-      { code: 'sv', label: 'Swedish (sv)' },
-    ];
+    let currentKeys = {};
 
     async function loadLocales(){
       try{
         const res = await fetch('/i18n-admin/locales', { headers:{ ...authHeaders() } });
         if(!res.ok) throw new Error(await res.text());
         const rows = await res.json();
-        const existing = Array.isArray(rows) ? rows.map(r => String(r.code)) : [];
-        const euMap = new Map(EU_LOCALES.map(l => [l.code, l.label]));
-        const mergedCodes = Array.from(new Set([...EU_LOCALES.map(l => l.code), ...existing]));
-        elLocale.innerHTML = mergedCodes.map(code => {
-          const label = euMap.get(code) || `${code}`;
-          return `<option value="${code}">${label}</option>`;
-        }).join('');
+        const existing = new Set(Array.from(elLocale.options).map(opt => opt.value).filter(Boolean));
+        if(Array.isArray(rows)){
+          for (const row of rows){
+            const code = String(row?.code || '').trim();
+            if(!code || existing.has(code)) continue;
+            const opt = document.createElement('option');
+            opt.value = code;
+            opt.textContent = row?.label || code;
+            elLocale.appendChild(opt);
+            existing.add(code);
+          }
+        }
       }catch(e){ showToast(t('toast.load_failed'),'err'); }
     }
-
-    let currentKeys = {};
 
     function renderKeys(){
       const q = (elQ.value||'').toLowerCase();

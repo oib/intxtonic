@@ -33,14 +33,14 @@
 
   <main class="container">
     <section class="card welcome-card" id="welcome-card">
-      <h1 id="welcome-heading">Welcome back to inTXTonic</h1>
-      <p id="welcome-subheading">Dive into the latest translations, summaries, and conversations crafted by the community.</p>
+      <h1 id="welcome-heading" data-i18n="home.welcome_back_default">Welcome back to inTXTonic</h1>
+      <p id="welcome-subheading" data-i18n="home.welcome_subheading_default">Dive into the latest translations, summaries, and conversations crafted by the community.</p>
       <div class="welcome-links" style="margin-top:1.5rem">
         <h2 data-i18n="home.quick_links">Quick links</h2>
         <ul class="home-links">
-          <li><a href="/dashboard/">Discover trending posts</a></li>
-          <li><a href="/tags/top">Browse top tags</a></li>
-          <li><a href="/notifications">Check your notifications</a></li>
+          <li><a href="/dashboard/" data-i18n="home.discover_trending">Discover trending posts</a></li>
+          <li><a href="/tags/top" data-i18n="home.browse_top_tags">Browse top tags</a></li>
+          <li><a href="/notifications" data-i18n="home.check_notifications">Check your notifications</a></li>
         </ul>
         <p class="hint" data-i18n="home.try_ai">Tip: translate or summarise any post instantly using the AI tools in the post toolbar.</p>
       </div>
@@ -48,8 +48,8 @@
 
     <section class="card home-section" aria-labelledby="home-latest-heading">
       <div class="home-section-head">
-        <h2 id="home-latest-heading">Latest for you</h2>
-        <a href="/dashboard/" class="link link--subtle">View full feed</a>
+        <h2 id="home-latest-heading" data-i18n="home.latest_for_you">Latest for you</h2>
+        <a href="/dashboard/" class="link link--subtle" data-i18n="home.view_full_feed">View full feed</a>
       </div>
       <div id="auth-latest-posts" class="home-posts-grid" role="list"></div>
     </section>
@@ -168,8 +168,12 @@
           const defaultLabel = profileLink.dataset.defaultLabel || 'Profile';
           profileLink.textContent = label || defaultLabel;
         }
-        welcomeHeading.textContent = `Welcome back, ${user.display_name || user.handle}!`;
-        welcomeSubheading.textContent = `Explore what the community has shared since your last visit, ${user.handle}.`;
+        const displayName = (user.display_name || '').trim();
+        const handle = (user.handle || '').trim();
+        const greetingName = displayName || handle || t('nav.profile');
+        const subheadingHandle = handle || greetingName;
+        welcomeHeading.textContent = t('home.welcome_back_user', { name: greetingName });
+        welcomeSubheading.textContent = t('home.welcome_subheading_user', { handle: subheadingHandle });
         if (adminLink) {
           const isAdmin = user.is_admin || (Array.isArray(user.roles) && user.roles.includes('admin'));
           adminLink.style.display = isAdmin ? 'inline-flex' : 'none';
