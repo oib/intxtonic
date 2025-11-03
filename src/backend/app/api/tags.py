@@ -51,6 +51,7 @@ class TagOut(BaseModel):
     id: str
     slug: str
     label: str
+    domain: str
     is_banned: bool = False
     is_restricted: bool = False
     created_at: str
@@ -61,6 +62,7 @@ class TagWithCountOut(BaseModel):
     id: str
     slug: str
     label: str
+    domain: str
     usage_count: int
     is_banned: bool
     is_restricted: bool
@@ -120,7 +122,7 @@ async def list_tags(
     visibility_enabled = await tag_visibility_available(pool)
 
     sql = """
-      SELECT t.id, t.slug, t.label, t.is_banned, t.is_restricted, t.created_at, t.created_by_admin
+      SELECT t.id, t.slug, t.label, t.domain, t.is_banned, t.is_restricted, t.created_at, t.created_by_admin
       FROM app.tags t
     """
     params: list[object] = []
@@ -158,10 +160,11 @@ async def list_tags(
             "id": str(r[0]),
             "slug": r[1],
             "label": r[2],
-            "is_banned": r[3],
-            "is_restricted": r[4],
-            "created_at": r[5].isoformat() if r[5] else None,
-            "created_by_admin": bool(r[6]) if len(r) > 6 else False,
+            "domain": r[3],
+            "is_banned": r[4],
+            "is_restricted": r[5],
+            "created_at": r[6].isoformat() if r[6] else None,
+            "created_by_admin": bool(r[7]) if len(r) > 7 else False,
         }
         for r in rows
     ]
@@ -183,7 +186,7 @@ async def list_admin_tag_groups(
         async with conn.cursor() as cur:
             await cur.execute(
                 """
-                SELECT t.id, t.slug, t.label, t.is_banned, t.is_restricted, t.created_at, t.created_by_admin
+                SELECT t.id, t.slug, t.label, t.domain, t.is_banned, t.is_restricted, t.created_at, t.created_by_admin
                 FROM app.tags t
                 WHERE NOT (LOWER(t.slug) = ANY(%s))
                   AND NOT EXISTS (
@@ -203,10 +206,11 @@ async def list_admin_tag_groups(
             id=str(row[0]),
             slug=row[1],
             label=row[2],
-            is_banned=bool(row[3]),
-            is_restricted=bool(row[4]),
-            created_at=row[5].isoformat() if row[5] else None,
-            created_by_admin=bool(row[6]),
+            domain=row[3],
+            is_banned=bool(row[4]),
+            is_restricted=bool(row[5]),
+            created_at=row[6].isoformat() if row[6] else None,
+            created_by_admin=bool(row[7]),
         )
         if data.created_by_admin:
             admin_created.append(data)
@@ -238,7 +242,7 @@ async def list_top_tags(
             cache_key = None
 
     sql = """
-      SELECT t.id, t.slug, t.label, t.is_banned, t.is_restricted, COALESCE(p.cnt, 0) AS usage_count, t.created_by_admin
+      SELECT t.id, t.slug, t.label, t.domain, t.is_banned, t.is_restricted, COALESCE(p.cnt, 0) AS usage_count, t.created_by_admin
       FROM app.tags t
       LEFT JOIN (
         SELECT tag_id, COUNT(*) AS cnt
@@ -269,10 +273,11 @@ async def list_top_tags(
             "id": str(r[0]),
             "slug": r[1],
             "label": r[2],
-            "is_banned": bool(r[3]),
-            "is_restricted": bool(r[4]),
-            "usage_count": int(r[5] or 0),
-            "created_by_admin": bool(r[6]) if len(r) > 6 else False,
+            "domain": r[3],
+            "is_banned": bool(r[4]),
+            "is_restricted": bool(r[5]),
+            "usage_count": int(r[6] or 0),
+            "created_by_admin": bool(r[7]) if len(r) > 7 else False,
         }
         for r in rows
     ]
@@ -305,22 +310,23 @@ async def create_tag(
     if not slug:
         raise HTTPException(status_code=400, detail="invalid label")
     is_restricted = slug not in LANGUAGE_TAG_SLUGS
+    tag_domain = 'language' if slug in LANGUAGE_TAG_SLUGS else 'admin'
 
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
                 """
-                INSERT INTO app.tags (id, slug, label, is_restricted, created_by_admin)
-                VALUES (gen_random_uuid(), %s, %s, %s, true)
+                INSERT INTO app.tags (id, slug, label, domain, is_restricted, created_by_admin)
+                VALUES (gen_random_uuid(), %s, %s, %s, %s, true)
                 ON CONFLICT (slug) DO NOTHING
-                RETURNING id, slug, label, is_banned, is_restricted, created_at, created_by_admin
+                RETURNING id, slug, label, domain, is_banned, is_restricted, created_at, created_by_admin
                 """,
-                (slug, label, is_restricted),
+                (slug, label, tag_domain, is_restricted),
             )
             row = await cur.fetchone()
             if not row:
                 await cur.execute(
-                    "SELECT id, slug, label, is_banned, is_restricted, created_at, created_by_admin FROM app.tags WHERE slug=%s",
+                    "SELECT id, slug, label, domain, is_banned, is_restricted, created_at, created_by_admin FROM app.tags WHERE slug=%s",
                     (slug,),
                 )
                 row = await cur.fetchone()
@@ -329,10 +335,11 @@ async def create_tag(
                 "id": str(row[0]),
                 "slug": row[1],
                 "label": row[2],
-                "is_banned": row[3],
-                "is_restricted": row[4],
-                "created_at": row[5].isoformat() if row[5] else None,
-                "created_by_admin": bool(row[6]) if len(row) > 6 else True,
+                "domain": row[3],
+                "is_banned": row[4],
+                "is_restricted": row[5],
+                "created_at": row[6].isoformat() if row[6] else None,
+                "created_by_admin": bool(row[7]) if len(row) > 7 else True,
             }
 
 
@@ -351,7 +358,7 @@ async def unrestrict_tag(
                 UPDATE app.tags
                 SET is_restricted = false
                 WHERE id = %s
-                RETURNING id, slug, label, is_banned, is_restricted, created_at, created_by_admin
+                RETURNING id, slug, label, domain, is_banned, is_restricted, created_at, created_by_admin
                 """,
                 (tag_id,),
             )
@@ -363,10 +370,11 @@ async def unrestrict_tag(
         "id": str(row[0]),
         "slug": row[1],
         "label": row[2],
-        "is_banned": row[3],
-        "is_restricted": row[4],
-        "created_at": row[5].isoformat() if row[5] else None,
-        "created_by_admin": bool(row[6]) if len(row) > 6 else False,
+        "domain": row[3],
+        "is_banned": row[4],
+        "is_restricted": row[5],
+        "created_at": row[6].isoformat() if row[6] else None,
+        "created_by_admin": bool(row[7]) if len(row) > 7 else False,
     }
 
 

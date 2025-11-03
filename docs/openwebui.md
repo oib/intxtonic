@@ -1,166 +1,173 @@
-# OpenWebUI API Integration in SoulTribe.chat
+# OpenWebUI/Ollama Integration in inTXTonic
 
-This document provides a detailed analysis of how SoulTribe.chat connects to OpenWebUI via API for AI-powered features, with the purpose of serving as a reference for integration in other Windsurf projects.
+This document provides a detailed analysis of how inTXTonic connects to OpenWebUI/Ollama via API for AI-powered translation and summarization features, with the purpose of serving as a reference for integration in other Windsurf projects.
 
 ## Overview
 
-OpenWebUI serves as an AI integration layer in SoulTribe.chat, primarily used for generating personalized astrological match summaries and profile interpretations. It acts as a proxy to Ollama, providing an OpenAI-compatible API for chat completions.
+OpenWebUI serves as an AI integration layer in inTXTonic, primarily used for generating translations and summaries of multilingual content. It acts as a proxy to Ollama, providing an OpenAI-compatible API for chat completions that power the translation and summarization worker processes.
 
 ## Integration Components
 
-### 1. Purpose in SoulTribe.chat
+### 1. Purpose in inTXTonic
 
-- **Matchmaking Summaries**: Generates friendly, concise summaries for user matches based on astrological synastry metrics.
-- **Profile Interpretations**: Provides personalized astrological readings for user profiles with conversational follow-up capabilities.
+- **Content Translation**: Generates high-quality translations of blog posts and content to supported languages.
+- **Content Summarization**: Creates concise summaries of longer posts for better user experience.
+- **Background Processing**: Handles AI requests asynchronously through Redis queue workers.
 
 ### 2. Backend Components
 
-#### 2.1 API Endpoints
-- `POST /api/match/annotate` (in `routes/match.py`)
-  - **Input**: `{ "match_id": number }`
-  - **Behavior**: Builds a compact prompt with score context, calls a Node CLI to interact with OpenWebUI, and stores the generated comment in the `Match.comment` field.
-- `POST /api/profile/interpret` (in `routes/profile.py`)
-  - **Input**: `{ message?: string, history?: Array<{ role: 'user'|'assistant', content: string }> }`
-  - **Behavior**: Loads the current user's astrological data (`Radix.json`), builds a prompt including user information and chat history, calls the Node CLI, and returns the AI response.
+#### 2.1 Node.js Client
+- `src/backend/js/ollama.js`: OpenAI-compatible Chat Completions client for Node.js that reads environment variables:
+  - `OLLAMA_BASE_URL` or `OLLAMA_BASE`: Base URL of the API (e.g., http://127.0.0.1:11434 or your OpenWebUI proxy).
+  - `OLLAMA_API_KEY`: API key if required by your gateway.
+  - `OLLAMA_MODEL`: Default model name (e.g., `llama3`, `qwen2`, `gemma2`).
 
-#### 2.2 Node.js Wrappers
-- `src/backend/js/ollama.js`: An OpenAI-compatible Chat Completions client for Node.js that reads environment variables:
-  - `OLLAMA_BASE` or `OPENWEBUI_BASE_URL`: Base URL of the API (e.g., http://127.0.0.1:11434 or your OpenWebUI proxy).
-  - `OLLAMA_API_KEY` or `OPENWEBUI_API_KEY`: API key if required by your gateway.
-  - `OLLAMA_MODEL` or `OPENWEBUI_MODEL`: Default model name (e.g., `gemma2:9b`).
-- `src/backend/js/ollama_cli.mjs` is a thin wrapper around `src/backend/js/ollama.js`. It expects a JSON array of strings, runs the chat completion, and prints the reply.
+#### 2.2 CLI Wrapper
+- `src/backend/js/ollama_cli.mjs`: Thin wrapper around `ollama.js` that expects a JSON array of strings, runs the chat completion, and prints the reply.
+- Used by Python backend via `subprocess.run()` for AI requests.
 
-#### 2.3 Batch Processing for Pairwise Evaluations
-- **Script**: `batch_pair_eval.py` (located in `/root/scripts/soultribe/`)
-- **Behavior**:
-  - Pulls all users from the database.
-  - Iterates through all unique user pairs.
-  - Computes astrological compatibility scores.
-  - Calls OpenWebUI to generate a comment for each pair.
-  - Stores results in `pairwise_ai_evals` (for all pairs) and `matches` (for visible matches with score ≥ 50).
-- **Scheduling**: Runs nightly via systemd timer or cron job for regular updates.
+#### 2.3 AI Service Integration
+- `src/backend/app/services/ai_service.py`: Python service that calls the Node CLI
+  - `translate_text()`: Handles translation requests with proper prompt engineering
+  - `summarize_text()`: Generates summaries with context-aware prompts
+  - Includes retry logic, error handling, and text chunking for long content
+
+#### 2.4 Background Worker
+- `src/backend/app/workers/translation_worker.py`: Async worker that processes translation/summarization jobs
+  - Consumes jobs from Redis queue `translation_jobs`
+  - Calls AI service via Node CLI wrapper
+  - Stores results in PostgreSQL `app.translations` table
 
 ### 3. Database Structure
 
-- **pairwise_ai_evals**: Stores AI replies for every user pair (visible or hidden).
-  - Fields: `user_a_id`, `user_b_id`, `pair_key` (unique), `score`, `score_vector`, `ai_reply`, `ai_model`, `eval_lang`, etc.
-- **matches**: Stores match information and AI comments only for visible matches (score ≥ 50).
-  - Fields: `user_a_id`, `user_b_id`, `score`, `score_vector`, `ai_comment`, `ai_model`, `status` ('visible' or 'hidden'), etc.
+- **`app.translations`**: Stores AI-generated translations and summaries
+  - Fields: `id`, `account_id`, `source_type`, `source_id`, `target_language`, `source_text`, `translated_text`, `mode`, `created_at`
+  - Supports both translation and summarization modes
+  - Indexed for efficient lookup by user and content
 
-### 4. Frontend Integration
+### 4. API Integration
 
-- **Dashboard (`web/dashboard.js`)**:
-  - Features a "Generate AI comment" button that ensures a match via `/api/match/create`, then calls `/api/match/annotate`.
-- **Profile Section (`web/profile.html`, `web/profile.js`)**:
-  - "AI Interpretation" section allows users to get initial readings and ask follow-up questions via `POST /api/profile/interpret`.
+- **Translation Endpoint**: `POST /api/posts/{post_id}/translate`
+  - Enqueues translation job with target language
+  - Returns job ID for status tracking
+  
+- **Summarization Endpoint**: `POST /api/posts/{post_id}/summarize`
+  - Enqueues summarization job with language preference
+  - Returns job ID for status tracking
+
+- **Job Status**: `GET /api/jobs/{job_id}`
+  - Provides real-time status of AI processing jobs
+  - Returns results when completed
 
 ## Technical Flow
 
-1. **User Pair Evaluation**: A batch script evaluates all user pairs, calculating astrological compatibility.
-2. **Prompt Construction**: Structured prompts are created including match metrics or user profile data.
-3. **API Interaction**: The Node CLI (`ollama_cli.mjs`) sends requests to OpenWebUI's chat completions endpoint.
-4. **Response Storage**: AI responses are stored in the database, with selective display based on match scores.
-5. **User Display**: Users see AI-generated content for high-scoring matches or personal interpretations without numerical scores or ratings.
+1. **User Request**: Frontend requests translation/summarization via API endpoints
+2. **Job Queuing**: Backend validates request and enqueues job to Redis
+3. **Background Processing**: Worker consumes job and prepares content for AI
+4. **Text Chunking**: Long content is split into manageable chunks (~1200 chars)
+5. **AI Communication**: Node CLI sends requests to OpenWebUI's chat completions endpoint
+6. **Response Assembly**: AI responses are combined and post-processed
+7. **Database Storage**: Results are stored in `app.translations` table
+8. **Status Update**: Job status is updated and results are made available
 
 ## Key API Interaction Details
 
-- **Endpoint**: OpenWebUI provides an OpenAI-compatible API typically at `/v1/chat/completions`.
+- **Endpoint**: OpenWebUI provides an OpenAI-compatible API typically at `/v1/chat/completions`
 - **Request Format**:
-  - **Headers**: Includes `Content-Type: application/json` and optionally `Authorization: Bearer <API_KEY>`.
-  - **Payload**: Contains `model`, `messages` (array of system and user prompts), `temperature`, and `max_tokens`.
-- **Response**: Returns JSON with the AI-generated text in `choices[0].message.content`.
+  - **Headers**: Includes `Content-Type: application/json` and optionally `Authorization: Bearer <API_KEY>`
+  - **Payload**: Contains `model`, `messages` (system and user prompts), `temperature`, and `max_tokens`
+- **Response**: Returns JSON with the AI-generated text in `choices[0].message.content`
 
 ## Environment Configuration
 
 - **Variables**:
-  - `OPENWEBUI_BASE_URL`: The base URL for the OpenWebUI API.
-  - `OPENWEBUI_API_KEY`: Authentication key if required.
-  - `OPENWEBUI_MODEL`: Specifies the AI model to use.
-  - `OPENWEBUI_RATE_DELAY_SEC`: Controls pacing of requests to avoid overwhelming the service.
-- **Location**: Stored in environment variables or `.env` files, ensuring they are accessible to backend services and Node processes.
+  - `OLLAMA_BASE_URL`: The base URL for the OpenWebUI/Ollama API
+  - `OLLAMA_API_KEY`: Authentication key if required
+  - `OLLAMA_MODEL`: Specifies the AI model to use (e.g., `llama3`, `qwen2`)
+- **Location**: Stored in environment variables or `.env` files, ensuring accessibility to backend services and Node processes
 
 ## Security Considerations
 
-- **Authentication**: API endpoints require valid JWT tokens for user authentication.
-- **Secrets Management**: API keys and other secrets are kept out of version control and logs.
+- **Authentication**: API endpoints require valid JWT tokens for user authentication
+- **Secrets Management**: API keys and other secrets are kept out of version control and logs
+- **User Isolation**: Translation results are scoped to user accounts for privacy
 
 ## Adapting to Other Windsurf Projects
 
 To integrate OpenWebUI into another project:
 
-1. **Setup OpenWebUI Access**:
-   - Ensure you have access to an OpenWebUI instance or set up a new one proxying to Ollama.
-   - Configure environment variables for base URL, API key (if needed), and model selection.
+1. **Setup OpenWebUI Access**
+   - Ensure access to an OpenWebUI instance or set up Ollama with OpenAI-compatible mode
+   - Configure environment variables for base URL, API key, and model selection
 
-2. **Create API Client**:
-   - Develop or adapt a client similar to `ollama.js` for making OpenAI-compatible requests.
-   - Consider a CLI or direct API calls depending on your backend architecture.
+2. **Create API Client**
+   - Develop or adapt a client similar to `ollama.js` for OpenAI-compatible requests
+   - Consider a CLI wrapper for backend integration
 
-3. **Define Use Cases**:
-   - Identify where AI can enhance your application (e.g., content generation, user insights).
-   - Design structured prompts that provide context and elicit desired responses.
+3. **Define Use Cases**
+   - Identify where AI can enhance your application (e.g., content processing, user insights)
+   - Design structured prompts for consistent, high-quality results
 
-4. **Database Integration**:
-   - Plan storage for AI-generated content, considering whether all responses or only specific ones should be user-visible.
-   - Create appropriate tables or fields to store responses alongside relevant metadata (model used, language, timestamps).
+4. **Implement Queue-Based Processing**
+   - Use Redis or similar queue system for background AI processing
+   - Design workers to handle AI requests asynchronously
 
-5. **Frontend Features**:
-   - Implement UI elements to trigger AI content generation and display results.
-   - Handle conversational flows if applicable, maintaining history for context.
+5. **Database Integration**
+   - Plan storage for AI-generated content with appropriate metadata
+   - Create tables for caching results and tracking job status
 
-6. **Batch Processing (if needed)**:
-   - For bulk operations, design scripts to process data and interact with OpenWebUI.
-   - Implement scheduling for regular updates.
+6. **Error Handling and Monitoring**
+   - Build robust error handling for API failures
+   - Implement job status tracking and retry logic
+   - Add logging for debugging and monitoring
 
-7. **Error Handling and Rate Limiting**:
-   - Build robust error handling for API failures.
-   - Implement rate limiting to respect service constraints.
-
-## Example Code Snippet (Batch Script)
+## Example Code Snippet (AI Service)
 
 ```python
-# Example from batch_pair_eval.py
-def openwebui_comment(res, ua, ub, lang="en"):
-    """Calls OpenWebUI and returns text reply (single string)."""
-    url = f"{OPENWEBUI_BASE_URL}/v1/chat/completions"
-    headers = {"Content-Type":"application/json"}
-    if OPENWEBUI_API_KEY:
-        headers["Authorization"] = f"Bearer {OPENWEBUI_API_KEY}"
-
-    system = (
-        "You write concise, friendly, non-cringe match summaries based on astrological factors. "
-        "Do not mention numeric scores or star ratings. No therapy, no medical or legal advice."
+# Example from ai_service.py
+async def translate_text(text: str, target_language: str):
+    """Calls OpenWebUI via Node CLI and returns translation."""
+    cli_path = Path(__file__).parent.parent.parent / "js" / "ollama_cli.mjs"
+    
+    system_prompt = (
+        f"You are a professional translator. Translate the following text "
+        f"to {target_language}. Preserve the original meaning and tone. "
+        f"Only return the translated text without explanations."
     )
-    user_prompt = (
-        f"Two users were matched with synastry metrics.\n"
-        f"Return one short paragraph (max 90 words) and a 3-bullet strengths list.\n"
-        f"Language: {lang}\n\n"
-        # ... rest of prompt with metrics and names
+    
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": text}
+    ]
+    
+    result = subprocess.run(
+        ["node", str(cli_path), json.dumps(messages)],
+        capture_output=True,
+        text=True,
+        timeout=120
     )
-
-    payload = {
-        "model": OPENWEBUI_MODEL,
-        "messages": [
-            {"role":"system","content": system},
-            {"role":"user","content": user_prompt}
-        ],
-        "temperature": 0.7,
-        "max_tokens": 500
-    }
-    r = requests.post(url, headers=headers, data=json.dumps(payload), timeout=120)
-    r.raise_for_status()
-    data = r.json()
-    txt = data["choices"][0]["message"]["content"].strip()
-    return txt
+    
+    if result.returncode != 0:
+        raise Exception(f"AI service error: {result.stderr}")
+    
+    return result.stdout.strip()
 ```
+
+## Performance Optimization
+
+- **Text Chunking**: Prevents timeouts for long content by splitting into manageable pieces
+- **Async Processing**: Queue-based system prevents blocking user requests
+- **Caching**: Stores results to avoid redundant AI calls for identical content
+- **Rate Limiting**: Implements pacing to respect AI service limits
 
 ## Troubleshooting
 
-- **Connection Issues**: Verify that the OpenWebUI base URL is reachable from your application environment.
-- **Authentication Errors**: Check that the API key is correct and properly set in environment variables.
-- **Response Quality**: Adjust prompt structure and parameters like `temperature` for desired output style.
-- **Performance**: Implement appropriate delays or rate limiting if API calls are frequent.
+- **Connection Issues**: Verify that OpenWebUI/Ollama base URL is reachable from the application environment
+- **Authentication Errors**: Check that API keys are correct and properly set in environment variables
+- **Response Quality**: Adjust prompt structure, temperature, and model selection for desired output
+- **Performance**: Implement appropriate delays, rate limiting, and caching for frequent API calls
+- **Node.js Issues**: Ensure Node.js is installed and CLI wrapper has proper permissions
 
 ## Conclusion
 
-SoulTribe.chat's integration with OpenWebUI demonstrates a robust approach to incorporating AI-generated content into a web application. By adapting the components and patterns described, other Windsurf projects can leverage AI capabilities through OpenWebUI for various use cases, enhancing user experience with personalized, dynamic content.
+inTXTonic's integration with OpenWebUI demonstrates a robust approach to incorporating AI-powered content processing into a web application. By combining queue-based background processing, structured prompt engineering, and proper error handling, the system provides reliable translation and summarization features that enhance the multilingual blogging experience.

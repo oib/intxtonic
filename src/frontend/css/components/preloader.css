@@ -1,0 +1,73 @@
+/* Preloader styles */
+.preloader {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--bg-0, #ffffff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  transition: opacity 0.3s ease-out;
+}
+
+.preloader--hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.preloader__content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.preloader__spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--bd-2, #e5e7eb);
+  border-top: 3px solid var(--pri, #ff7a1a);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.preloader__logo {
+  width: 48px;
+  height: 48px;
+}
+
+.preloader__text {
+  font-size: 0.9rem;
+  color: var(--tx-1, #6b7280);
+  font-weight: 500;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Prevent FOUC by hiding body until preloader is ready */
+body:not(.preloader-ready) {
+  visibility: hidden;
+}
+
+body.preloader-ready .preloader {
+  opacity: 1;
+}
+
+body.preloader-ready .preloader--hidden {
+  opacity: 0;
+}
+
+body.styles-loaded {
+  visibility: visible;
+}
+
+body.styles-loaded .preloader {
+  opacity: 0;
+  pointer-events: none;
+}

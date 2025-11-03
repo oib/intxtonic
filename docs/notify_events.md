@@ -1,25 +1,69 @@
 ---
-description: notify events SSE issue investigation
+description: SSE events system status and implementation
 ---
-# `/notify/events` SSE Connection Issue
+# Server-Sent Events (`/notify/events`) System
 
-- **Summary**
-  The admin interfaces (`/admin` and `/admin/i18n`) still report "The connection to https://intxtonic.net/notify/events was interrupted while the page was loading". The Firefox HAR trace captured on 2025-10-03 shows standard asset loads but no long-lived SSE stream entry.
+## Overview
+inTXTonic implements a Server-Sent Events (SSE) system at `/notify/events` for real-time notifications to connected clients. This is used for features like:
+- Live translation job status updates
+- Admin debug logging for i18n translations
+- Real-time notifications for background processing
 
-- **Backend state**
-  `src/backend/app/api/notify.py` was updated to emit `:ok` immediately and `:keepalive` comments every 30s inside `_event_stream()`. If the Gunicorn process has not been restarted since this change, workers may still be running the previous implementation without keep-alives.
+## Current Implementation
 
-- **Proxy configuration**
-  `/etc/nginx/sites-available/intxtonic.net` includes the recommended SSE directives (`proxy_buffering off`, `proxy_cache off`, `proxy_send_timeout 1h`, `add_header X-Accel-Buffering no`). nginx still returns 499 in prior logs, indicating the client closes the socket early because it stops receiving data.
+### Backend (`src/backend/app/api/notify.py`)
+- **Endpoint**: `GET /notify/events` returns `StreamingResponse` with `media_type="text/event-stream"`
+- **Keep-alive mechanism**: Sends `:ok` on connection, then `:keepalive` every 30 seconds to prevent timeouts
+- **Event format**: Uses standard SSE format with `data: {json_payload}\n\n`
+- **Error handling**: Gracefully handles client disconnections via `asyncio.CancelledError`
 
-- **Observed symptoms**
-  - Firefox console logs the interruption on both admin pages immediately after load.
-  - Network panel shows no sustained pending request for `/notify/events`; the stream closes before any payload is delivered.
-  - nginx access log entries for `/notify/events` previously showed early disconnects (HTTP 499) despite Gunicorn responding with 200.
+### Core Pub/Sub (`src/backend/app/core/notify.py`)
+- **In-memory queue**: Uses `asyncio.Queue` for subscriber management
+- **Simple pub/sub**: `subscribe()`, `unsubscribe()`, and `publish()` functions
+- **Thread-safe**: Protected by `asyncio.Lock()` for concurrent access
+- **Limitations**: Currently in-memory only (not suitable for multi-process deployment)
 
-- **Outstanding checks**
-  1. Restart the backend service: `systemctl --user restart intxtonic.service`, then tail `journalctl --user -fu intxtonic.service` to confirm the new generator is active and no errors are raised when clients connect.
-  2. Reload nginx after verifying the config: `sudo nginx -t && sudo systemctl reload nginx`.
-  3. Reproduce with Firefox DevTools open, confirm `/notify/events` stays pending, and inspect the response pane for `:ok`/`:keepalive` comments.
-  4. Monitor `/var/log/nginx/intxtonic_access.log` to ensure the SSE connection remains open (no immediate 499).
-  5. If the stream still interrupts, capture simultaneous browser network details, nginx logs, and Gunicorn logs to determine whether upstream closes the connection or if a proxy timeout persists.
+## Frontend Integration
+- **EventSource**: Frontend connects using `new EventSource('/notify/events')`
+- **Event types**: Supports different event types like `i18n_debug` for admin translation logging
+- **Auto-reconnect**: Browsers typically handle automatic reconnection on dropped connections
+
+## Configuration Requirements
+- **Proxy configuration**: nginx should include SSE-friendly directives:
+  ```nginx
+  proxy_buffering off;
+  proxy_cache off;
+  proxy_send_timeout 1h;
+  add_header X-Accel-Buffering no;
+  ```
+
+## Recent Improvements
+✅ **Fixed keep-alive issues**: Added 30-second timeout with `:keepalive` comments
+✅ **Improved error handling**: Proper cleanup on client disconnection
+✅ **Standard SSE format**: Uses correct event-stream format for browser compatibility
+
+## Known Limitations
+- **Single-process only**: Current in-memory implementation doesn't work across multiple processes
+- **No persistence**: Events are lost if no subscribers are connected
+- **Memory usage**: Long-lived connections accumulate in memory
+
+## Production Considerations
+For production deployment, consider replacing the in-memory pub/sub with:
+- **Redis pub/sub**: For scalable multi-process deployments
+- **Postgres LISTEN/NOTIFY**: For database-integrated notifications
+- **Message broker**: RabbitMQ or similar for enterprise scenarios
+
+## Troubleshooting
+- **Connection interrupts**: Check nginx proxy configuration and keep-alive settings
+- **Missing events**: Verify backend service is running and not restarted frequently
+- **Memory leaks**: Monitor connection count and implement connection limits if needed
+
+## Example Usage
+```javascript
+// Frontend SSE connection
+const eventSource = new EventSource('/notify/events');
+eventSource.onmessage = function(event) {
+    const data = JSON.parse(event.data);
+    console.log('Received:', data);
+};
+```

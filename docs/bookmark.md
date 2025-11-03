@@ -5,8 +5,8 @@ This document explains the server-side bookmark system introduced for LangSum. I
 ## Database Schema Overview
 
 - **`app.bookmarks`**
-  - Stores per-account bookmarks for posts, replies, or other resources.
-  - Columns: `id`, `account_id`, `target_type` (`post|reply|other`), `target_id`, `created_at`.
+  - Stores per-account bookmarks for posts, replies, tags, or other resources.
+  - Columns: `id`, `account_id`, `target_type` (`post|reply|tag|other`), `target_id`, `created_at`.
   - Unique constraint on `(account_id, target_type, target_id)` prevents duplicate bookmarks.
   - Indexed by `(account_id, target_type)` for fast lookup.
 
@@ -26,7 +26,7 @@ This document explains the server-side bookmark system introduced for LangSum. I
 Routes are registered under `/bookmarks` in `src/backend/app/main.py`.
 
 - `POST /bookmarks`
-  - Body: `{ "target_type": "post", "target_id": "<uuid>", "tags": ["favorite"] }`
+  - Body: `{ "target_type": "post|reply|tag|other", "target_id": "<uuid|string>", "tags": ["favorite"] }`
   - Upserts the bookmark, adds optional tag slugs (always including `bookmarked`).
   - For posts, also attaches the global `bookmarked` tag via `app.post_tags`.
   - Response: bookmark metadata including tags and `created_at`.
@@ -48,6 +48,14 @@ Routes are registered under `/bookmarks` in `src/backend/app/main.py`.
   - Returns bookmark status for multiple targets, used to hydrate frontend stars.
 
 All endpoints require authentication (`Depends(get_current_account_id)`), using the asyncpg pool via `get_pool`.
+
+## Tag Bookmarks
+
+- **Purpose**: Users can bookmark tags for quick access to favorite topics.
+- **Implementation**: Tag bookmarks use the same `app.bookmarks` table with `target_type = 'tag'`.
+- **Target ID**: Uses tag slug (string) instead of UUID for tags.
+- **UI Integration**: Tag bookmarks can be managed through the same star interface on tag pages or dashboard.
+- **Validation**: Backend validates that tag exists before allowing bookmark creation.
 
 ## Frontend Integration
 
@@ -93,6 +101,9 @@ All endpoints require authentication (`Depends(get_current_account_id)`), using 
 
 ## Future Enhancements
 
-- Extend stars to reply lists and other content types.
-- Add a dedicated “My Bookmarks” view using `GET /bookmarks` filters.
+- Extend stars to reply lists and other content types beyond posts.
+- Add a dedicated "My Bookmarks" view using `GET /bookmarks` filters with improved UI.
 - Allow users to manage custom bookmark tags through the UI.
+- Implement bookmark collections or folders for better organization.
+- Add bookmark sharing capabilities between users.
+- Provide bookmark analytics and usage statistics.

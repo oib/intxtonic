@@ -151,11 +151,13 @@ CREATE TABLE IF NOT EXISTS app.tags (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   slug        citext UNIQUE NOT NULL,
   label       text NOT NULL,
+  domain      text NOT NULL DEFAULT 'user_created' CHECK (domain IN ('admin','user_handle','user_created','language')),
   created_at  timestamptz NOT NULL DEFAULT now(),
   is_banned   boolean NOT NULL DEFAULT false,
   created_by_admin boolean NOT NULL DEFAULT false
 );
 CREATE INDEX IF NOT EXISTS tags_slug_idx ON app.tags (slug);
+CREATE INDEX IF NOT EXISTS tags_domain_idx ON app.tags (domain);
 
 CREATE TABLE IF NOT EXISTS app.post_tags (
   post_id   uuid NOT NULL REFERENCES app.posts(id) ON DELETE CASCADE,

@@ -1,98 +1,181 @@
-# AI Integration: OpenWebUI / Ollama
+# AI Integration: Translation & Summarization
 
-This document explains how the backend talks to an OpenAI-compatible API (e.g., OpenWebUI -> Ollama) and how the frontend uses it. It also covers environment variables, request/response formats, and example calls.
+This document explains how inTXTonic integrates with AI services for translation and summarization features. The system uses OpenAI-compatible APIs (e.g., Ollama, OpenWebUI) through a Node.js CLI wrapper with Redis queue-based background processing.
 
 ## Components
 
-- Backend wrappers
-  - `src/backend/js/ollama.js` — OpenAI-compatible Chat Completions client (Node). Reads `.env`:
-    - `OLLAMA_BASE` — Base URL of the API (e.g., http://127.0.0.1:11434 or your OpenWebUI proxy)
+### Backend Services
+- **`src/backend/app/services/ai_service.py`** — Core AI service for translation and summarization
+  - `translate_text()` - Translates text to target language with chunking support
+  - `summarize_text()` - Generates summaries of text content
+  - `split_text_into_chunks()` - Handles long text by splitting into manageable chunks
+  - Supports retry logic, prompt engineering, and error handling
+  - Reads environment variables:
+    - `OLLAMA_BASE_URL` — Base URL of the AI API (e.g., http://127.0.0.1:11434)
     - `OLLAMA_API_KEY` — API key if required by your gateway
-    - `OLLAMA_MODEL` — Default model name
-  - `src/backend/js/ollama_cli.mjs` — Small Node CLI that imports `src/backend/js/ollama.js` and performs a single chat completion from a provided sequence of strings. The backend uses this via `subprocess.run()`.
+    - `OLLAMA_MODEL` — Default model name for AI operations
 
-- Backend endpoints
-  - `POST /api/match/annotate` (in `routes/match.py`)
-    - Input: `{ "match_id": number }`
-    - Behavior: Builds a compact prompt with score context and calls Node CLI; stores the one-line comment in `Match.comment`.
-  - `POST /api/profile/interpret` (in `routes/profile.py`)
-    - Input: `{ message?: string, history?: Array<{ role: 'user'|'assistant', content: string }> }`
-    - Behavior: Loads the current user’s `Radix.json`, builds a short system intro + user display name + radix JSON, then appends optional chat history and/or `message`. Calls Node CLI and returns `{ reply: string }`.
+- **`src/backend/app/services/translation_queue.py`** — Redis queue management
+  - `enqueue_translation_job()` - Adds translation/summarization jobs to Redis queue
+  - Job schema: `{ job_id, source_type, source_id, target_lang, mode, payload? }`
+  - Modes: `translate`, `summarize`
+  - Queue name: `translation_jobs`
+  - Job status tracking in Redis hashes: `translation_job:{job_id}`
 
-- Frontend hooks
-  - Dashboard (`web/dashboard.js`)
-    - “Generate AI comment” button: ensures a match via `/api/match/create`, then calls `/api/match/annotate`.
-  - Profile (`web/profile.html`, `web/profile.js`)
-    - “AI Interpretation” section: 
-      - `Get Interpretation` calls `POST /api/profile/interpret` without a `message` to fetch a concise initial reading.
-      - Follow-up messages append to a local `history` array sent along with each `message` to the same endpoint.
+- **`src/backend/app/services/translation_cache.py`** — Database caching
+  - `store_translation()` - Persists translation results to PostgreSQL
+  - `fetch_translation()` - Retrieves cached translations
+  - Stores in `app.translations` table with metadata
 
-## Sequence Design
+- **`src/backend/app/workers/translation_worker.py`** — Background worker
+  - Consumes jobs from Redis queue `translation_jobs`
+  - Processes translation and summarization requests
+  - Updates job status and stores results in database
+  - Handles errors and retry logic
 
-The Node CLI receives a JSON-serialized array of strings (a simple linear “sequence”):
+### Node.js CLI Wrapper
+- **`src/backend/js/ollama_cli.mjs`** — Node.js CLI wrapper
+  - Imports OpenAI-compatible client from `src/backend/js/ollama.js`
+  - Accepts JSON-serialized message arrays via command line
+  - Performs single chat completion requests
+  - Returns AI-generated text output
 
-- For match annotation:
-  - Lines include `Match <id>`, perspective, other display name, numerical score, score breakdown JSON, and an instruction to produce a one-sentence friendly comment that addresses “you” and the other’s name.
-- For profile interpretation:
-  - Lines include a short “system” guidance (friendly, concise astrologer), `User: <display_name>`, `Radix: <json>`, optional chat history lines prefixed as `User:` or `You:`, and the last turn (question or request).
+- **`src/backend/js/ollama.js`** — OpenAI-compatible API client
+  - Handles HTTP requests to AI endpoints
+  - Manages authentication, headers, and error handling
+  - Reads configuration from environment variables
 
-CLI output is treated as the final reply. The backend may apply post-processing (e.g. sanitize A/B to “you” and the other’s name in match annotations).
+### API Endpoints
+- **`POST /api/posts/{post_id}/translate`** (in `src/backend/app/api/ai.py`)
+  - Input: `{ "target_language": "de" }`
+  - Behavior: Enqueues translation job for post content
+  - Response: `{ "job_id": "uuid", "status": "queued" }`
 
-## Environment
+- **`POST /api/posts/{post_id}/summarize`** (in `src/backend/app/api/ai.py`)
+  - Input: `{ "language": "en", "source_text": "optional" }`
+  - Behavior: Enqueues summarization job
+  - Response: `{ "job_id": "uuid", "status": "queued" }`
 
-- `.env` variables used by `src/backend/js/ollama.js`:
-  - `OLLAMA_BASE` — Base URL for the OpenAI-compatible endpoint.
-  - `OLLAMA_API_KEY` — API key if your gateway requires one.
-  - `OLLAMA_MODEL` — Default model, e.g. `llama3`, `qwen2`, etc.
+- **`GET /api/jobs/{job_id}`** (in `src/backend/app/api/ai.py`)
+  - Behavior: Retrieves job status and results
+  - Response: Job metadata with status, progress, and results when complete
 
-Make sure your backend service environment inherits these variables so the Node process (spawned by FastAPI via `subprocess`) can see them.
+## Supported Languages
 
-## Requirements
+The system supports translation to major European and Asian languages:
+- **European**: bg, hr, cs, da, nl, en, et, fi, fr, de, el, hu, ga, it, lv, lt, mt, pl, pt, ro, sk, sl, es, sv
+- **Asian**: ja, ko, zh
+- **Other**: ru
 
-- Node.js available on the system PATH (the backend calls `node src/backend/js/ollama_cli.mjs ...`).
-- The OpenAI-compatible API should accept Chat Completions requests. OpenWebUI can proxy to Ollama in OpenAI-compatible mode.
+## Processing Flow
 
-## Example Requests
+### Translation Flow
+1. HTTP client requests translation via `POST /api/posts/{id}/translate`
+2. Backend validates request and enqueues job to Redis with `mode=translate`
+3. Background worker consumes job, reads post content from database
+4. Worker splits long text into chunks (max 1200 chars each)
+5. Each chunk is sent to AI service via Node.js CLI
+6. Translated chunks are reassembled and stored in `app.translations`
+7. Job status is updated to `completed` with result metadata
 
-- Match annotation (frontend flow):
-  1. `POST /api/match/create` with `{ a_user_id, b_user_id }` → returns `{ match_id }` (idempotent).
-  2. `POST /api/match/annotate` with `{ match_id }` → returns `{ match_id, comment }` and persists it.
+### Summarization Flow
+1. HTTP client requests summary via `POST /api/posts/{id}/summarize`
+2. Backend enqueues job with `mode=summarize`
+3. Worker processes content and generates concise summary
+4. Result is stored and job marked complete
 
-- Profile interpretation (curl):
+## Environment Configuration
 
+Required environment variables:
 ```bash
-curl -X POST http://127.0.0.1:8001/api/profile/interpret \
-  -H 'Authorization: Bearer <JWT>' \
-  -H 'Content-Type: application/json' \
-  -d '{"message": null, "history": []}'
+# AI Service Configuration
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_API_KEY=your_api_key_if_needed
+OLLAMA_MODEL=llama3
+
+# Database and Queue
+DATABASE_URL=postgresql://user:pass@localhost/langsum
+REDIS_URL=redis://localhost:6379
 ```
 
-- Follow-up (ping-pong):
+## Database Schema
 
-```bash
-curl -X POST http://127.0.0.1:8001/api/profile/interpret \
-  -H 'Authorization: Bearer <JWT>' \
-  -H 'Content-Type: application/json' \
-  -d '{
-        "message": "Can you elaborate on the Moon aspect?",
-        "history": [
-          {"role":"assistant","content":"<first reply>"}
-        ]
-      }'
-```
+### `app.translations` table
+- `id` - Primary key
+- `account_id` - User who requested the translation
+- `source_type` - Type of source content (e.g., 'post')
+- `source_id` - ID of the source content
+- `target_language` - Language code for translation
+- `source_text` - Original text (optional, for summarization)
+- `translated_text` - AI-generated translation/summary
+- `mode` - 'translate' or 'summarize'
+- `created_at` - Timestamp
+- `updated_at` - Last update timestamp
 
 ## Error Handling
 
-- If Node cannot be executed or times out, the backend returns `500` with `Failed to run ollama client`.
-- If the CLI returns non-zero, the backend returns `502` with the CLI error output.
+- **Node.js execution failures**: Returns 500 with "Failed to run ollama client"
+- **CLI non-zero exit**: Returns 502 with CLI error output
+- **Queue processing errors**: Logged and job status updated with error details
+- **Rate limiting**: Implemented to prevent AI service overload
 
 ## Security Notes
 
-- The AI endpoints require a valid JWT via the usual auth dependency.
-- Do not log secrets. Keep `.env` out of version control.
+- All AI endpoints require valid JWT authentication
+- API keys and secrets are stored in environment variables, not in code
+- Translation results are scoped by user account
+- Admin users can view all translation jobs via admin queue management
+
+## Performance Considerations
+
+- Text chunking prevents AI service timeouts for long content
+- Redis queue enables asynchronous processing without blocking HTTP requests
+- Translation caching avoids redundant AI calls for identical content
+- Background worker can be scaled independently of API servers
+
+## Monitoring and Debugging
+
+- Job status available via `/api/jobs/{job_id}` endpoint
+- Detailed logs written to `dev/logs/translation-debug.log`
+- Redis hashes provide real-time job progress tracking
+- Admin queue management interface for monitoring background jobs
+
+## Deployment Requirements
+
+- Node.js available on system PATH for CLI execution
+- Redis server for job queue management
+- PostgreSQL database for storing translation results
+- AI service (Ollama/OpenWebUI) accessible via configured base URL
+
+## Example Usage
+
+### Translate a post
+```bash
+curl -X POST \
+  -H 'Authorization: Bearer <JWT>' \
+  -H 'Content-Type: application/json' \
+  -d '{"target_language":"de"}' \
+  http://localhost:8002/api/posts/123/translate
+```
+
+### Check job status
+```bash
+curl http://localhost:8002/api/jobs/<job_id>
+```
+
+### Summarize content
+```bash
+curl -X POST \
+  -H 'Authorization: Bearer <JWT>' \
+  -H 'Content-Type: application/json' \
+  -d '{"language":"en"}' \
+  http://localhost:8002/api/posts/123/summarize
+```
 
 ## Troubleshooting
 
-- 405 Method Not Allowed on `/api/profile/interpret`: ensure the server has reloaded after adding the endpoint (restart `make dev` or systemd unit).
-- Ensure Node is installed and available in the service environment.
-- Verify `OLLAMA_BASE` points to a reachable OpenAI-compatible endpoint.
+- **401 Unauthorized**: Ensure valid JWT token is provided
+- **500 Failed to run ollama client**: Check Node.js installation and CLI path
+- **502 CLI error**: Verify AI service is running and accessible
+- **Job stuck in queued status**: Check translation worker process and Redis connectivity
+- **Translation quality issues**: Review prompts in `ai_service.py` and consider model selection

@@ -2,7 +2,22 @@
 
 ## Overview
 - **Source**: API behavior defined in `src/backend/app/api/tags.py` with helpers in `src/backend/app/core/tag_access.py`.
-- **Purpose**: Control which tags appear to different users based on ban/restriction flags, direct assignments, and role-based visibility.
+- **Purpose**: Control which tags appear to different users based on ban/restriction flags, direct assignments, role-based visibility, and tag domains.
+
+## Tag Domains
+Tags are organized into four domains with different creation and removal permissions:
+
+### Domain Types
+- **`admin`**: Created by administrators through the admin panel. Cannot be removed by users after post creation.
+- **`user_handle`**: Auto-generated from user's handle when creating posts. Cannot be removed by users after post creation.
+- **`language`**: Auto-generated from user's default locale (e.g., "de" → "German"). Cannot be removed by users after post creation.
+- **`user_created`**: Created manually by users when authoring posts. Can be removed by users after post creation.
+
+### Domain Behavior
+- **Creation**: Only `user_created` tags can be created by users during post authoring. Other domains are system-generated.
+- **Removal**: Only `user_created` tags can be removed by post authors. `admin`, `user_handle`, and `language` tags are protected.
+- **Visual Distinction**: Different colors and styling indicate tag domains in the UI.
+- **Auto-tagging**: User handle and language tags are automatically added when posts are created.
 
 ## Tag States
 - **Normal**: `is_banned = false`, `is_restricted = false`. Visible to everyone.
@@ -16,16 +31,19 @@
 - **Role-based access**: If a role has access to a restricted tag (`app.tag_visibility.role_id`), every account holding that role inherits tag visibility.
 
 ## Key Endpoints
-- `GET /tags`: Lists tags respecting visibility rules. Uses `build_access_clause()` to filter restricted tags.
-- `GET /tags/list-top`: Returns top tags with usage counts and applies the same visibility filtering for non-admins.
-- `POST /tags`: Admin-only. Creates a new tag with `is_restricted = true` by default so admins must explicitly grant visibility.
-- `POST /tags` auto-detects language slugs (`en`, `de`, `fr`, `es`, `it`, `pt`, `zh`, `ja`, `ko`, `ru`) and makes them unrestricted immediately.
+- `GET /tags`: Lists tags respecting visibility rules. Uses `build_access_clause()` to filter restricted tags. Includes domain information.
+- `GET /tags/list-top`: Returns top tags with usage counts and applies the same visibility filtering for non-admins. Includes domain information.
+- `POST /tags`: Admin-only. Creates a new tag with `is_restricted = true` and `domain = 'admin'` by default.
+- `POST /tags` auto-detects language slugs (`en`, `de`, `fr`, `es`, `it`, `pt`, `zh`, `ja`, `ko`, `ru`) and makes them unrestricted with `domain = 'language'`.
 - `POST /tags/{id}/unrestrict`: Admin-only. Sets `is_restricted = false` so the tag becomes visible to all audiences (subject to bans).
 - `POST /tags/{id}/ban` & `POST /tags/{id}/unban`: Admin-only toggles for ban state.
 - `GET /tags/visibility`: Admin-only snapshot of which roles/users can see each restricted tag.
 - `GET /tags/visibility/users/{handle}`: Admin-only lookup of tags assigned to a specific user.
 - `POST /tags/{id}/visibility/users`: Admin-only assignment of a restricted tag to a user (`app.tag_visibility.account_id`).
 - `DELETE /tags/{id}/visibility/users/{handle}`: Admin-only removal of a user assignment.
+- `POST /posts`: Auto-tags posts with user handle (`domain = 'user_handle'`) and language (`domain = 'language'`) tags.
+- `POST /posts/{post_id}/tags`: Allows users to add `user_created` domain tags to their posts.
+- `DELETE /posts/{post_id}/tags/{tag_id}`: Only allows removal of `user_created` domain tags. Blocks removal of `admin`, `user_handle`, and `language` tags.
 - **Admin UI route**: `/admin/tags` renders `src/frontend/pages/admin-tags.html`, exposing Tag Management (create tag, review admin/user groups, manage visibility). The `/admin` landing page now links out to this dedicated view and no longer embeds tag creation controls.
 
 ## Dashboard Tag Filter Wiring
@@ -49,9 +67,10 @@
 - **Guests**: Without a token, both `dashboard.html` and `tags.html` redirect to `/login` before fetching data. Backend endpoints such as `/posts` require `get_current_account_id`, so unauthenticated requests are rejected with `401`.
 
 ## Database Structures
-- **`app.tags`**: Stores tag metadata and flags (`is_banned`, `is_restricted`).
+- **`app.tags`**: Stores tag metadata and flags (`is_banned`, `is_restricted`, `domain`). Domain constraint: `IN ('admin','user_handle','user_created','language')`.
 - **`app.tag_visibility`**: Junction table linking tags to either `account_id` (user-specific access) or `role_id` (role-wide access).
 - **`app.account_roles`**: Used to determine inherited visibility when a tag is granted to a role.
+- **`app.post_tags`**: Junction table linking posts to tags. Domain permissions enforced at deletion time.
 
 ## Caching Notes
 - Admin responses for `GET /tags` and `GET /tags/list-top` may be cached in Redis for 120 seconds. Cache invalidated on tag create/ban/unban.
@@ -59,8 +78,12 @@
 ## Usage Guidelines
 - **Creating tags**: After `POST /tags`, grant visibility to roles/users before the tag is usable by non-admins.
 - **Opening tags**: Use `POST /tags/{id}/unrestrict` once a tag should be globally visible without per-user assignments.
-- **Language tags**: Slugs like `en`, `de`, `fr`, `es`, `it`, `pt`, `zh`, `ja`, `ko`, `ru` are always public; no unrestriction or assignments needed.
+- **Language tags**: Slugs like `en`, `de`, `fr`, `es`, `it`, `pt`, `zh`, `ja`, `ko`, `ru` are always public with `domain = 'language'`; no unrestriction or assignments needed.
+- **User handle tags**: Automatically created with `domain = 'user_handle'` when users post. Cannot be removed by the user.
+- **User-created tags**: Tags added during post authoring get `domain = 'user_created'` and can be removed by the post author.
+- **Admin tags**: Created through `/admin/tags` with `domain = 'admin'`. Cannot be removed by regular users.
 - **Assigning roles**: Prefer role assignments when multiple users need the same restricted tag access.
 - **Auditing access**: Use `GET /tags/visibility` (global) and `GET /tags/visibility/users/{handle}` (per-user) to verify assignments.
 - **Managing bans**: Banned tags remain in the database for history but should not appear publicly until unbanned.
-- **Admin vs post tagging**: Only tags created through `/admin/tags` (Tag Management > Create tag) are flagged `created_by_admin`. Tags added inline while authoring posts—whether by admins or other users—are treated as user-created and appear under the "User-created tags" list in `admin-tags.html`.
+- **Domain permissions**: When attempting to remove tags from posts, only `user_created` domain tags can be removed. `admin`, `user_handle`, and `language` tags are protected and will return 403 if removal is attempted.
+- **Admin vs post tagging**: Only tags created through `/admin/tags` (Tag Management > Create tag) are flagged `created_by_admin` and get `domain = 'admin'`. Tags added inline while authoring posts—whether by admins or other users—are treated as `user_created` domain and appear under the "User-created tags" list in `admin-tags.html`.

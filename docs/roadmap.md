@@ -3,11 +3,13 @@
 *Project: intxtonic.net*
 
 ## 🚀 Phase 1 · Immediate Focus
-- **Frontend**: Admin moderation page polish (resolve actions, tag management create/ban/unban) [in progress]
-- **Frontend**: Admin user list enhancements (search, pagination, disable/enable, email visibility)
-- **Admin Tools**: Extend tag governance docs with `created_by_admin` provenance and dashboard flows
+- **Frontend**: Admin moderation page polish (resolve actions, tag management create/ban/unban) ✅ completed
+- **Frontend**: Admin user list enhancements (search, pagination, disable/enable, email visibility) ✅ completed
+- **Admin Tools**: Extend tag governance docs with `created_by_admin` provenance and dashboard flows ✅ completed
 
 ## ⏭️ Phase 2 · Next Up
+- **AI & Translation**: Complete translation worker integration and job status monitoring
+- **AI & Translation**: Add translation and summarization endpoints to frontend UI
 - **Docs**: Finalize `layout.md` for 960px grid and mobile design
 - **Docs**: Expand `admin.md` with moderator tasks and permissions
 - **Dev & Docs**: Update README (profiles section, moderation notes, deployment with nginx reverse proxy)
@@ -56,6 +58,16 @@
 - Added test coverage for tag unrestriction flow in `tests/test_tags_replies.py`
 - Established `log/` folder for capturing manual responses (e.g., `log/login_response.json`) and future app logs; prefer `journalctl --user -u intxtonic.service` and app logs for auditing requests instead of manual snapshots
 - Landing language picker now auto-detects browser locale (fallbacks to `en` if unsupported)
+- AI translation backend with Redis queue worker (`translation_worker.py`) for async processing
+- Translation and summarization API endpoints (`/api/posts/{id}/translate`, `/api/posts/{id}/summarize`)
+- Job status monitoring via Redis hashes (`translation_job:{job_id}`) and HTTP endpoint (`/api/jobs/{job_id}`)
+- AI service integration with Node.js CLI for Ollama/OpenWebUI communication
+- Translation caching system with PostgreSQL storage (`app.translations` table)
+- Queue-driven background processing for AI tasks with Redis job queue
+- SSE notification events system (`/notify/events`) for real-time updates
+- File upload handling via `/uploads` endpoint with image processing
+- Admin queue management system for monitoring background jobs
+- Moderation tools with admin-only endpoints for content management
 
 ### 🧪 Tests & CI
 - Pytest with httpx ASGI coverage of health, auth/posts, tags/replies, permissions (403), rate limits (429), and post filtering
@@ -76,9 +88,10 @@
 ### ☀️ Daily Setup
 - [ ] Pull latest changes from main branch
 - [ ] Activate poetry/venv and ensure dependencies installed
-- [ ] Start backend services (Postgres, FastAPI via gunicorn or uvicorn)
+- [ ] Start backend services (Postgres, Redis, FastAPI via gunicorn or uvicorn)
+- [ ] Launch translation worker if using AI features: `python -m src.backend.app.workers.translation_worker`
 - [ ] Launch frontend dev server (if applicable)
-- [ ] Verify .env configuration matches environment (API keys, DB URL)
+- [ ] Verify .env configuration matches environment (API keys, DB URL, Redis URL, Ollama/OpenWebUI settings)
 
 ### 🧩 Step-by-step Workflow (Windsurf)
 1. Launch inTXTonic and open the target workspace.

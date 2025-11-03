@@ -4,10 +4,74 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>inTXTonic • Home</title>
+  <!-- Inline critical preloader styles to prevent FOUC -->
+  <style>
+    /* Prevent FOUC - hide everything until preloader is ready */
+    html { visibility: hidden !important; }
+    body:not(.preloader-ready) { visibility: hidden !important; }
+    .preloader {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100% !important;
+      height: 100% !important;
+      background: #ffffff !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      z-index: 9999 !important;
+      transition: opacity 0.3s ease-out !important;
+      visibility: visible !important;
+    }
+    .preloader--hidden {
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
+    .preloader__content {
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      gap: 1rem !important;
+    }
+    .preloader__spinner {
+      width: 40px !important;
+      height: 40px !important;
+      border: 3px solid #e5e7eb !important;
+      border-top: 3px solid #ff7a1a !important;
+      border-radius: 50% !important;
+      animation: spin 1s linear infinite !important;
+    }
+    .preloader__text {
+      font-size: 0.9rem !important;
+      color: #6b7280 !important;
+      font-weight: 500 !important;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    body.preloader-ready {
+      visibility: visible !important;
+    }
+    body.preloader-ready .preloader {
+      opacity: 1 !important;
+    }
+    body.styles-loaded {
+      visibility: visible !important;
+    }
+    body.styles-loaded .preloader {
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
+    /* Fix h1 elements */
+    h1 { font-size: 1.75rem !important; margin: 0 0 0.5rem 0 !important; }
+  </style>
   <link rel="stylesheet" href="/src/frontend/css/base.css">
   <link rel="stylesheet" href="/src/frontend/css/components.css">
   <link rel="stylesheet" href="/src/frontend/css/layout.css">
+  <link rel="stylesheet" href="/src/frontend/css/components/preloader.css">
   <link rel="stylesheet" href="/src/frontend/css/pages/home.css">
+  <script type="module" src="/src/frontend/js/preloader.js"></script>
   <script type="module" src="/src/frontend/js/i18n-runtime.js" data-i18n-init></script>
 </head>
 <body>
@@ -66,6 +130,10 @@
     import { authHeaders, getToken, clearToken } from '/src/frontend/js/auth.js';
     import { showToast } from '/src/frontend/js/toast.js';
     import { t } from '/src/frontend/js/i18n-runtime.js';
+    import preloader from '/src/frontend/js/preloader.js';
+
+    // Initialize preloader
+    preloader.init();
 
     const logoutBtn = document.getElementById('logout-btn');
     const profileLink = document.getElementById('profile-link');
@@ -122,11 +190,6 @@
         }
         latestPosts.innerHTML = items.map(item => {
           const previewSrc = sanitisePreview(item.body_md || '');
-          const tags = (item.tags || [])
-            .filter(t => !t.is_restricted)
-            .map(t => `#${t.slug}`)
-            .join(', ');
-          const tagHtml = tags ? `<div class="hint">${tags}</div>` : '';
           const preview = previewSrc.slice(0, 200);
           const ellipsis = previewSrc.length > 200 ? '…' : '';
           return `
@@ -134,9 +197,8 @@
             <a class="home-post__title" href="/post/${item.id}">${item.title}</a>
             <div class="home-post__meta">${item.author ? `by ${item.author}` : 'by someone'}${item.created_at ? ` · ${new Date(item.created_at).toLocaleDateString()}` : ''}</div>
             <p class="home-post__excerpt">${preview}${ellipsis}</p>
-            ${tagHtml}
             <div class="home-post__tags">
-              ${(Array.isArray(item.tags) ? item.tags : []).slice(0,3).map(tag => `<span class="badge">#${tag.slug}</span>`).join('')}
+              ${(Array.isArray(item.tags) ? item.tags : []).filter(t => !t.is_restricted).slice(0,3).map(tag => `<a href="/tags/${encodeURIComponent(tag.slug)}" class="badge badge--link">#${tag.slug}</a>`).join('')}
             </div>
           </article>
         `}).join('');
@@ -189,6 +251,26 @@
     }
 
     init();
+  </script>
+  <!-- Inline preloader initialization - runs after body is available -->
+  <script>
+    // Initialize preloader immediately after body is parsed
+    function initPreloader() {
+      if (document.body) {
+        // Show preloader and make content visible
+        document.documentElement.style.visibility = 'visible';
+        document.body.classList.add('preloader-ready');
+      } else {
+        // Fallback if body is still not available
+        document.addEventListener('DOMContentLoaded', function() {
+          document.documentElement.style.visibility = 'visible';
+          document.body.classList.add('preloader-ready');
+        });
+      }
+    }
+    
+    // Run immediately
+    initPreloader();
   </script>
 </body>
 </html>

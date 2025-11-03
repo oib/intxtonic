@@ -1,0 +1,243 @@
+/* Create page specific styles */
+
+.create-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.create-form__title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--tx-0);
+  margin: 0 0 0.5rem 0;
+}
+
+.create-form__meta {
+  color: var(--tx-1);
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-group label {
+  font-weight: 500;
+  color: var(--tx-0);
+  font-size: 0.95rem;
+}
+
+.form-group .input,
+.form-group textarea {
+  padding: 0.75rem;
+  border: 1px solid var(--bd-2);
+  border-radius: 6px;
+  font-size: 0.95rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form-group .input:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: var(--pri);
+  box-shadow: 0 0 0 3px rgba(255, 122, 26, 0.1);
+}
+
+.form-group textarea {
+  min-height: 200px;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+.form-actions {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
+.char-counter {
+  font-size: 0.85rem;
+  color: var(--tx-2);
+  text-align: right;
+  margin-top: 0.25rem;
+}
+
+.char-counter.warning {
+  color: var(--warning);
+}
+
+.char-counter.error {
+  color: var(--danger);
+}
+
+.tag-input-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.tag-input-wrapper {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.tag-input {
+  flex: 1;
+}
+
+.tag-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.tag-suggestion {
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tag-suggestion:hover {
+  background-color: var(--bg-2);
+  transform: translateY(-1px);
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  min-height: 2rem;
+}
+
+.tag-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  background-color: var(--bg-1);
+  border: 1px solid var(--bd-2);
+  color: var(--tx-0);
+  transition: all 0.2s ease;
+}
+
+.tag-item .remove-tag {
+  cursor: pointer;
+  color: var(--tx-2);
+  font-weight: bold;
+  margin-left: 0.25rem;
+  transition: color 0.2s ease;
+}
+
+.tag-item .remove-tag:hover {
+  color: var(--danger);
+}
+
+.form-error {
+  padding: 0.75rem;
+  background-color: var(--danger-1);
+  border: 1px solid var(--danger-2);
+  border-radius: 6px;
+  color: var(--danger);
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.form-success {
+  padding: 0.75rem;
+  background-color: var(--success-1);
+  border: 1px solid var(--success-2);
+  border-radius: 6px;
+  color: var(--success);
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.preview-section {
+  border: 1px solid var(--bd-2);
+  border-radius: 8px;
+  padding: 1rem;
+  background-color: var(--bg-1);
+  margin-top: 1rem;
+}
+
+.preview-section h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1.1rem;
+  color: var(--tx-0);
+}
+
+.preview-content {
+  line-height: 1.6;
+  color: var(--tx-1);
+}
+
+.preview-content h1,
+.preview-content h2,
+.preview-content h3,
+.preview-content h4,
+.preview-content h5,
+.preview-content h6 {
+  color: var(--tx-0);
+  margin: 1rem 0 0.5rem 0;
+}
+
+.preview-content p {
+  margin: 0 0 1rem 0;
+}
+
+.preview-content code {
+  background-color: var(--bg-2);
+  padding: 0.2rem 0.4rem;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9em;
+}
+
+.preview-content pre {
+  background-color: var(--bg-2);
+  padding: 1rem;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+
+.preview-content blockquote {
+  border-left: 4px solid var(--pri);
+  padding-left: 1rem;
+  margin: 1rem 0;
+  font-style: italic;
+  color: var(--tx-1);
+}
+
+@media (max-width: 768px) {
+  .form-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .form-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .tag-input-wrapper {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .tag-suggestions {
+    justify-content: center;
+  }
+}

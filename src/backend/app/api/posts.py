@@ -23,6 +23,7 @@ class PostTagOut(BaseModel):
     id: str
     slug: str
     label: str
+    domain: str
 
 
 class PostOut(BaseModel):
@@ -223,7 +224,7 @@ async def list_posts(
               SELECT p.id, p.title, p.body_md, p.lang, p.visibility, p.score, p.reply_count,
                      p.created_at, a.handle AS author,
                      COALESCE(
-                       json_agg(DISTINCT jsonb_build_object('id', t.id, 'slug', t.slug, 'label', t.label))
+                       json_agg(DISTINCT jsonb_build_object('id', t.id, 'slug', t.slug, 'label', t.label, 'domain', t.domain))
                        FILTER (WHERE t.id IS NOT NULL), '[]') AS tags,
                      {highlight_select},
                      {rank_select}
@@ -279,7 +280,7 @@ async def list_posts(
               SELECT p.id, p.title, p.body_md, p.lang, p.visibility, p.score, p.reply_count,
                      p.created_at, a.handle AS author,
                      COALESCE(
-                       json_agg(DISTINCT jsonb_build_object('id', t.id, 'slug', t.slug, 'label', t.label))
+                       json_agg(DISTINCT jsonb_build_object('id', t.id, 'slug', t.slug, 'label', t.label, 'domain', t.domain))
                        FILTER (WHERE t.id IS NOT NULL), '[]') AS tags,
                      {highlight_select},
                      {rank_select}
@@ -436,6 +437,16 @@ async def create_post(body: PostCreateIn, account_id: str = Depends(get_current_
 
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
+            # Get user info for auto-tagging and notification
+            await cur.execute(
+                "SELECT handle, locale FROM app.accounts WHERE id=%s",
+                (account_id,)
+            )
+            user_row = await cur.fetchone()
+            if not user_row:
+                raise HTTPException(status_code=404, detail="User not found")
+            author_handle, user_locale = user_row[0], user_row[1] or "en"
+            
             # Rate limit check (posts/day)
             settings = get_settings()
             await cur.execute(
@@ -474,6 +485,71 @@ async def create_post(body: PostCreateIn, account_id: str = Depends(get_current_
                 (account_id, title, text, body.lang if body.lang else "en", body.visibility),
             )
             new_id = (await cur.fetchone())[0]
+            
+            # Auto-tag: user handle tag
+            handle_slug = make_slug(author_handle)
+            if handle_slug:
+                await cur.execute(
+                    """
+                    INSERT INTO app.tags (id, slug, label, domain, is_restricted, created_by_admin)
+                    VALUES (gen_random_uuid(), %s, %s, 'user_handle', false, false)
+                    ON CONFLICT (slug) DO NOTHING
+                    RETURNING id
+                    """,
+                    (handle_slug, author_handle),
+                )
+                tag_row = await cur.fetchone()
+                if tag_row:
+                    handle_tag_id = tag_row[0]
+                else:
+                    await cur.execute("SELECT id FROM app.tags WHERE slug=%s", (handle_slug,))
+                    handle_tag_id = (await cur.fetchone())[0]
+                
+                await cur.execute(
+                    "INSERT INTO app.post_tags (post_id, tag_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                    (new_id, handle_tag_id),
+                )
+            
+            # Auto-tag: user default language tag
+            if user_locale and user_locale != "en":
+                lang_slug = make_slug(user_locale)
+                if lang_slug:
+                    lang_name = user_locale.upper()
+                    # Map common language codes to names
+                    lang_names = {
+                        'de': 'German', 'fr': 'French', 'es': 'Spanish', 'it': 'Italian',
+                        'pt': 'Portuguese', 'nl': 'Dutch', 'pl': 'Polish', 'ru': 'Russian',
+                        'ja': 'Japanese', 'ko': 'Korean', 'zh': 'Chinese', 'ar': 'Arabic',
+                        'hi': 'Hindi', 'tr': 'Turkish', 'sv': 'Swedish', 'no': 'Norwegian',
+                        'da': 'Danish', 'fi': 'Finnish', 'cs': 'Czech', 'sk': 'Slovak',
+                        'hu': 'Hungarian', 'ro': 'Romanian', 'bg': 'Bulgarian', 'hr': 'Croatian',
+                        'sr': 'Serbian', 'sl': 'Slovenian', 'et': 'Estonian', 'lv': 'Latvian',
+                        'lt': 'Lithuanian', 'el': 'Greek', 'he': 'Hebrew', 'th': 'Thai',
+                        'vi': 'Vietnamese', 'uk': 'Ukrainian', 'be': 'Belarusian'
+                    }
+                    lang_name = lang_names.get(user_locale, lang_name)
+                    
+                    await cur.execute(
+                        """
+                        INSERT INTO app.tags (id, slug, label, domain, is_restricted, created_by_admin)
+                        VALUES (gen_random_uuid(), %s, %s, 'language', false, false)
+                        ON CONFLICT (slug) DO NOTHING
+                        RETURNING id
+                        """,
+                        (lang_slug, lang_name),
+                    )
+                    tag_row = await cur.fetchone()
+                    if tag_row:
+                        lang_tag_id = tag_row[0]
+                    else:
+                        await cur.execute("SELECT id FROM app.tags WHERE slug=%s", (lang_slug,))
+                        lang_tag_id = (await cur.fetchone())[0]
+                    
+                    await cur.execute(
+                        "INSERT INTO app.post_tags (post_id, tag_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                        (new_id, lang_tag_id),
+                    )
+            
             # Bump posts_count
             await cur.execute(
                 """
@@ -779,8 +855,8 @@ async def attach_tag(
                     label = slug.replace('-', ' ').replace('_', ' ').replace('.', ' ').title() or slug
                 await cur.execute(
                     """
-                    INSERT INTO app.tags (id, slug, label, is_restricted, created_by_admin)
-                    VALUES (gen_random_uuid(), %s, %s, false, false)
+                    INSERT INTO app.tags (id, slug, label, domain, is_restricted, created_by_admin)
+                    VALUES (gen_random_uuid(), %s, %s, 'user_created', false, false)
                     ON CONFLICT (slug) DO NOTHING
                     RETURNING id, is_banned
                     """,
@@ -832,7 +908,51 @@ async def detach_tag(
             is_owner = owner_id and owner_id == account_id
             if not is_owner:
                 raise HTTPException(status_code=403, detail="only the author can modify tags")
+            
+            # Check tag domain - only allow removal of user_created tags
+            await cur.execute(
+                "SELECT domain FROM app.tags WHERE id=%s",
+                (tag_id,),
+            )
+            tag_row = await cur.fetchone()
+            if not tag_row:
+                raise HTTPException(status_code=404, detail="tag not found")
+            
+            tag_domain = tag_row[0]
+            if tag_domain in ('admin', 'user_handle', 'language'):
+                raise HTTPException(status_code=403, detail=f"Cannot remove {tag_domain} tags")
+            
             await cur.execute("DELETE FROM app.post_tags WHERE post_id=%s AND tag_id=%s", (post_id, tag_id))
+    return {"ok": True}
+
+
+@router.delete("/{post_id}", response_model=OkOut)
+async def delete_post(
+    post_id: str,
+    account_id: str = Depends(get_current_account_id),
+    pool = Depends(get_pool),
+    csrf: bool = Depends(csrf_validate),
+):
+    async with pool.connection() as conn:
+        async with conn.cursor() as cur:
+            # Check if post exists and user is the author
+            await cur.execute(
+                "SELECT author_id FROM app.posts WHERE id=%s AND deleted_at IS NULL",
+                (post_id,),
+            )
+            row = await cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Post not found")
+            
+            author_id = str(row[0]) if row[0] else None
+            if author_id != account_id:
+                raise HTTPException(status_code=403, detail="Only the author can delete their posts")
+            
+            # Soft delete the post
+            await cur.execute(
+                "UPDATE app.posts SET deleted_at = NOW() WHERE id=%s",
+                (post_id,),
+            )
     return {"ok": True}
 
 
@@ -858,7 +978,7 @@ async def get_post(post_id: str, account_id: str = Depends(get_current_account_i
             # Ensure viewer has access to all tags attached to this post
             await cur.execute(
                 """
-                SELECT t.id, t.slug
+                SELECT t.id, t.slug, t.domain
                 FROM app.post_tags pt
                 JOIN app.tags t ON t.id = pt.tag_id
                 WHERE pt.post_id = %s
@@ -891,7 +1011,7 @@ async def get_post(post_id: str, account_id: str = Depends(get_current_account_i
 @router.get("/{post_id}/tags", response_model=List[PostTagOut])
 async def list_post_tags(post_id: str, account_id: str = Depends(get_current_account_id), pool = Depends(get_pool)):
     sql = """
-      SELECT t.id, t.slug, t.label, t.is_banned, t.created_at
+      SELECT t.id, t.slug, t.label, t.domain, t.is_banned, t.created_at
       FROM app.post_tags pt
       JOIN app.tags t ON t.id = pt.tag_id
       WHERE pt.post_id = %s
@@ -906,8 +1026,9 @@ async def list_post_tags(post_id: str, account_id: str = Depends(get_current_acc
             "id": str(r[0]),
             "slug": r[1],
             "label": r[2],
-            "is_banned": r[3],
-            "created_at": r[4].isoformat() if r[4] else None,
+            "domain": r[3],
+            "is_banned": r[4],
+            "created_at": r[5].isoformat() if r[5] else None,
         }
         for r in rows
     ]

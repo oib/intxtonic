@@ -1,9 +1,10 @@
 /* Base: variables, reset, typography, utilities */
 :root{
-  --bg-0:#0b0f14; --bg-1:#11161c;
+  --bg-0:#0b0f14; --bg-1:#11161c; --bg-2:#0f131a; --bg-3:#1a1f29;
   --tx-0:#e6edf3; --tx-1:#a7b3be; --tx-2:#e6edf3;
   --pri:#ff7a1a; --ice:#b9ecff;
   --ok:#3ddc97; --warn:#ffcc00; --err:#ff4d4d;
+  --bd-1:rgba(185,236,255,.12); --bd-2:rgba(185,236,255,.18);
 
   --s-1:4px; --s-2:8px; --s-3:12px; --s-4:16px;
   --s-5:24px; --s-6:32px; --s-7:48px; --s-8:64px;

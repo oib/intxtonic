@@ -4,9 +4,81 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>inTXTonic • New Post</title>
+  <!-- Inline critical preloader styles to prevent FOUC -->
+  <style>
+    /* Prevent FOUC - hide everything until preloader is ready */
+    html { visibility: hidden !important; }
+    body:not(.preloader-ready) { visibility: hidden !important; }
+    .preloader {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100% !important;
+      height: 100% !important;
+      background: #ffffff !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      z-index: 9999 !important;
+      transition: opacity 0.3s ease-out !important;
+      visibility: visible !important;
+    }
+    .preloader--hidden {
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
+    .preloader__content {
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      gap: 1rem !important;
+    }
+    .preloader__spinner {
+      width: 40px !important;
+      height: 40px !important;
+      border: 3px solid #e5e7eb !important;
+      border-top: 3px solid #ff7a1a !important;
+      border-radius: 50% !important;
+      animation: spin 1s linear infinite !important;
+    }
+    .preloader__text {
+      font-size: 0.9rem !important;
+      color: #6b7280 !important;
+      font-weight: 500 !important;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    body.preloader-ready {
+      visibility: visible !important;
+    }
+    body.preloader-ready .preloader {
+      opacity: 1 !important;
+    }
+    body.styles-loaded {
+      visibility: visible !important;
+    }
+    body.styles-loaded .preloader {
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
+    /* Fix h1 elements */
+    h1 { font-size: 1.75rem !important; margin: 0 0 0.5rem 0 !important; }
+  </style>
   <link rel="stylesheet" href="/src/frontend/css/base.css">
   <link rel="stylesheet" href="/src/frontend/css/components.css">
   <link rel="stylesheet" href="/src/frontend/css/layout.css">
+  <link rel="stylesheet" href="/src/frontend/css/components/preloader.css">
+  <link rel="stylesheet" href="/src/frontend/css/pages/create.css">
+  <script type="module" src="/src/frontend/js/preloader.js"></script>
+  <script type="module" src="/src/frontend/js/i18n-runtime.js" data-i18n-init></script>
+  <style>
+    .tag-domain-admin { background: var(--accent-1); color: var(--accent); border: 1px solid var(--accent); }
+    .tag-domain-user_handle { background: var(--bg-2); color: var(--tx-1); border: 1px solid var(--border-color); }
+    .tag-domain-language { background: var(--success-1); color: var(--success); border: 1px solid var(--success); }
+    .tag-domain-user_created { background: var(--bg-1); color: var(--tx-1); border: 1px solid var(--border-color); }
+  </style>
 </head>
 <body>
   <header class="site">
@@ -53,8 +125,8 @@
               <h2 class="mb-6" style="margin:0">Tags</h2>
               <div style="position:relative;">
                 <div class="flex ai-c" style="gap:8px; flex-wrap:wrap">
-                  <input id="q-tags-create" class="input" placeholder="Search tags..." style="max-width:260px">
-                  <button id="btn-search-tags-create" class="btn btn--subtle" type="button">Search</button>
+                  <input id="q-tags-create" class="input" placeholder="Add or search tags..." style="max-width:300px">
+                  <button id="btn-add-tag-create" class="btn btn--subtle" type="button">Add</button>
                 </div>
                 <div id="tag-suggestions-create" class="card" style="position:absolute; display:none; width:100%; max-width:420px; z-index:20; margin-top:6px;"></div>
               </div>
@@ -88,8 +160,10 @@
   <script type="module">
     import { authHeaders, getToken, clearToken } from '/src/frontend/js/auth.js';
     import { showToast } from '/src/frontend/js/toast.js';
+    import preloader from '/src/frontend/js/preloader.js';
 
-    document.getElementById('year').textContent = new Date().getFullYear().toString();
+    // Initialize preloader
+    preloader.init();
 
     // Strong auth check: prefer /auth/me (cookie or token). Redirect to /login on 401.
     let currentUser = null;
@@ -152,6 +226,54 @@
         .replace(/^[-.]+|[-.]+$/g, '');
     }
 
+    // Language name mapping
+    const LANGUAGE_NAMES = {
+      'en': 'English',
+      'de': 'German',
+      'fr': 'French',
+      'es': 'Spanish',
+      'it': 'Italian',
+      'pt': 'Portuguese',
+      'nl': 'Dutch',
+      'pl': 'Polish',
+      'ru': 'Russian',
+      'ja': 'Japanese',
+      'ko': 'Korean',
+      'zh': 'Chinese',
+      'ar': 'Arabic',
+      'hi': 'Hindi',
+      'tr': 'Turkish',
+      'sv': 'Swedish',
+      'no': 'Norwegian',
+      'da': 'Danish',
+      'fi': 'Finnish',
+      'cs': 'Czech',
+      'sk': 'Slovak',
+      'hu': 'Hungarian',
+      'ro': 'Romanian',
+      'bg': 'Bulgarian',
+      'hr': 'Croatian',
+      'sr': 'Serbian',
+      'sl': 'Slovenian',
+      'et': 'Estonian',
+      'lv': 'Latvian',
+      'lt': 'Lithuanian',
+      'el': 'Greek',
+      'he': 'Hebrew',
+      'th': 'Thai',
+      'vi': 'Vietnamese',
+      'uk': 'Ukrainian',
+      'be': 'Belarusian',
+      'mk': 'Macedonian',
+      'sq': 'Albanian',
+      'mt': 'Maltese',
+      'is': 'Icelandic',
+      'ga': 'Irish',
+      'cy': 'Welsh',
+      'eu': 'Basque',
+      'ca': 'Catalan'
+    };
+
     // Tag selection state
     const selectedTags = new Map();
     function renderSelectedTags(){
@@ -159,12 +281,42 @@
       const btnClear = document.getElementById('btn-clear-tags-create');
       const arr = Array.from(selectedTags.values());
       if (btnClear) btnClear.style.display = arr.length ? 'inline-flex' : 'none';
-      el.innerHTML = arr.length ? arr.map(({ slug }) => `<span class="badge" data-tag-slug="${slug}">#${slug} <button class="btn btn--ghost rm-tag" data-slug="${slug}">×</button></span>`).join(' ') : '<span class="badge">No tags selected</span>';
+      el.innerHTML = arr.length ? arr.map(({ slug, label, domain }) => {
+        const isRemovable = domain !== 'admin' && domain !== 'user_handle' && domain !== 'language';
+        const removeBtn = isRemovable ? `<button class="btn btn--ghost rm-tag" data-slug="${slug}">×</button>` : '';
+        const domainClass = domain ? `tag-domain-${domain}` : '';
+        const domainHint = domain && domain !== 'user_created' ? ` <span style="color:var(--tx-2); font-size:0.8em">[${domain}]</span>` : '';
+        return `<span class="badge ${domainClass}" data-tag-slug="${slug}" title="${domain || 'user_created'}">#${slug} ${label && label !== slug ? `(${label})` : ''}${domainHint} ${removeBtn}</span>`;
+      }).join(' ') : '<span class="badge">No tags selected</span>';
       el.querySelectorAll('button.rm-tag').forEach(b => b.addEventListener('click', () => {
         const slug = b.getAttribute('data-slug');
         if (slug) selectedTags.delete(slug);
         renderSelectedTags();
       }));
+    }
+
+    // Auto-add user's default language tag
+    function addLanguageTag(locale) {
+      if (!locale || locale === 'en') return; // Skip English as it's the default
+      const langName = LANGUAGE_NAMES[locale] || locale.toUpperCase();
+      selectedTags.set(locale, { slug: locale, label: langName, domain: 'language' });
+    }
+    
+    // Auto-add user handle tag
+    function addUserHandleTag(handle) {
+      if (!handle) return;
+      const slug = makeSlug(handle);
+      if (slug) {
+        selectedTags.set(slug, { slug, label: handle, domain: 'user_handle' });
+      }
+    }
+
+    // Initialize with user's language tag and handle tag
+    if (currentUser && currentUser.locale) {
+      addLanguageTag(currentUser.locale);
+    }
+    if (currentUser && currentUser.handle) {
+      addUserHandleTag(currentUser.handle);
     }
     renderSelectedTags();
 
@@ -175,17 +327,45 @@
     let sugItems = [];
     let sugIndex = -1;
     let tmrSug;
-    function renderTagSuggestions(items){
+    function renderTagSuggestions(items, query){
       // De-duplicate by slug
       const seen = new Set();
       sugItems = (items||[]).filter(t => { if(seen.has(t.slug)) return false; seen.add(t.slug); return true; });
-      if(!sugItems.length){ elSug.style.display='none'; return; }
-      elSug.innerHTML = sugItems.map((t,i) => `
-        <div class="sug-row" data-idx="${i}" data-slug="${t.slug}" style="padding:8px; cursor:pointer;">
-          <span>#${t.slug}</span>
-          ${t.label && t.label !== t.slug ? ` <span style=\"color:var(--tx-1)\">— ${t.label}</span>` : ''}
-        </div>
-      `).join('');
+      
+      let html = '';
+      
+      // Show existing tags that match
+      if(sugItems.length){
+        html += sugItems.map((t,i) => `
+          <div class="sug-row" data-idx="${i}" data-slug="${t.slug}" style="padding:8px; cursor:pointer; border-bottom:1px solid var(--border-color)">
+            <span>#${t.slug}</span>
+            ${t.label && t.label !== t.slug ? ` <span style="color:var(--tx-1)">— ${t.label}</span>` : ''}
+          </div>
+        `).join('');
+      }
+      
+      // Show option to create new tag if query doesn't match existing
+      if(query && !sugItems.some(t => t.slug === makeSlug(query))){
+        const slug = makeSlug(query);
+        if(slug && !selectedTags.has(slug)){
+          const createIdx = sugItems.length;
+          html += `
+            <div class="sug-row sug-create" data-idx="${createIdx}" data-slug="${slug}" data-label="${query}" style="padding:8px; cursor:pointer; background:var(--bg-2)">
+              <span style="color:var(--accent)">+ Create new tag: #${slug}</span>
+              <span style="color:var(--tx-1)"> — "${query}"</span>
+            </div>
+          `;
+          // Store the create option in sugItems for selection
+          sugItems.push({ slug, label: query, isCreate: true });
+        }
+      }
+      
+      if(!html){ 
+        elSug.style.display='none'; 
+        return; 
+      }
+      
+      elSug.innerHTML = html;
       elSug.style.display = 'block';
       sugIndex = -1;
       elSug.querySelectorAll('.sug-row').forEach(row => {
@@ -201,10 +381,12 @@
     }
     function selectSuggestion(idx){
       if(idx<0 || idx>=sugItems.length) return;
-      const slug = sugItems[idx].slug;
-      if(slug){
-        const label = sugItems[idx].label || slug;
-        selectedTags.set(slug, { slug, label });
+      const item = sugItems[idx];
+      const slug = item.slug;
+      if(slug && !selectedTags.has(slug)){
+        const label = item.label || slug;
+        const domain = item.isCreate ? 'user_created' : (item.domain || 'user_created');
+        selectedTags.set(slug, { slug, label, domain });
         renderSelectedTags();
       }
       if(elQTags) elQTags.value = '';
@@ -215,9 +397,25 @@
         const res = await fetch(`/tags?query=${encodeURIComponent(q)}&limit=10`, { headers:{ ...authHeaders() } });
         if(!res.ok){ elSug.style.display='none'; return; }
         const rows = await res.json();
-        renderTagSuggestions(rows);
+        renderTagSuggestions(rows, q);
       } catch { elSug.style.display='none'; }
     }
+    
+    // Add tag button handler
+    const elBtnAddTag = document.getElementById('btn-add-tag-create');
+    function addCurrentTag(){
+      const raw = (elQTags?.value || '').trim();
+      if(!raw){ showToast('Enter a tag name', 'warn'); return; }
+      const slug = makeSlug(raw);
+      if(!slug){ showToast('Invalid tag', 'warn'); return; }
+      if(selectedTags.has(slug)){ showToast('Tag already added', 'warn'); return; }
+      selectedTags.set(slug, { slug, label: raw, domain: 'user_created' });
+      renderSelectedTags();
+      if(elQTags) elQTags.value = '';
+      elSug.style.display='none';
+    }
+    
+    elBtnAddTag?.addEventListener('click', addCurrentTag);
     elBtnSearchTags?.addEventListener('click', () => { const q = (elQTags?.value||'').trim(); if(q) searchTags(q); });
     elQTags?.addEventListener('input', () => {
       const q = (elQTags?.value || '').trim();
@@ -234,14 +432,7 @@
           e.preventDefault();
           return;
         }
-        const raw = (elQTags?.value || '').trim();
-        if(!raw) return;
-        const slug = makeSlug(raw);
-        if(!slug){ showToast('Invalid tag', 'warn'); return; }
-        selectedTags.set(slug, { slug, label: raw });
-        renderSelectedTags();
-        elQTags.value = '';
-        elSug.style.display = 'none';
+        addCurrentTag();
         e.preventDefault();
       }
       if(e.key==='ArrowDown'){
@@ -350,6 +541,26 @@
         showToast('Publish failed','err');
       }
     });
+  </script>
+  <!-- Inline preloader initialization - runs after body is available -->
+  <script>
+    // Initialize preloader immediately after body is parsed
+    function initPreloader() {
+      if (document.body) {
+        // Show preloader and make content visible
+        document.documentElement.style.visibility = 'visible';
+        document.body.classList.add('preloader-ready');
+      } else {
+        // Fallback if body is still not available
+        document.addEventListener('DOMContentLoaded', function() {
+          document.documentElement.style.visibility = 'visible';
+          document.body.classList.add('preloader-ready');
+        });
+      }
+    }
+    
+    // Run immediately
+    initPreloader();
   </script>
 </body>
 </html>

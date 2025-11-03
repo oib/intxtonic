@@ -4,12 +4,14 @@ main.container {
   max-width: 860px;
 }
 
+/* Post-specific heading overrides (only where different from base) */
 .card > h1 {
   font-size: 2.25rem;
   line-height: 1.2;
   margin: 0 0 1.25rem;
 }
 
+/* Content area heading styles */
 #body h1,
 #body h2,
 #body h3 {
