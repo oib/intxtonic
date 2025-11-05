@@ -434,10 +434,13 @@ async def list_tag_visibility(
       LEFT JOIN app.accounts a ON a.id = tv.account_id
     """
     params: list[object] = []
+    conditions: list[str] = ["t.created_by_admin = true"]
     if query:
-        sql += " WHERE t.slug ILIKE %s OR t.label ILIKE %s"
+        conditions.append("(t.slug ILIKE %s OR t.label ILIKE %s)")
         like = f"%{query}%"
         params.extend([like, like])
+    if conditions:
+        sql += " WHERE " + " AND ".join(conditions)
     sql += " GROUP BY t.id, t.slug, t.label ORDER BY t.slug ASC"
 
     async with pool.connection() as conn:

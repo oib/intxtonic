@@ -93,6 +93,23 @@
       flex-wrap: wrap;
       align-items: center;
     }
+
+    #prefs-section .settings-field {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+      margin-bottom: 12px;
+      width: min(100%, 320px);
+    }
+
+    #prefs-section #display-name {
+      width: min(100%, 240px);
+    }
+
+    #prefs-section #locale {
+      width: min(100%, 200px);
+    }
   </style>
   <script type="module" src="/src/frontend/js/i18n-runtime.js" data-i18n-init></script>
 </head>
@@ -125,13 +142,13 @@
       <article class="settings-section" id="prefs-section">
         <h2 data-i18n="settings.language_section_title">Language preference</h2>
         <p class="hint" data-i18n="settings.language_section_hint">Choose the default language we use for UI, translations, and summaries.</p>
-        <label class="flex ai-c" style="gap:8px; flex-wrap:wrap">
+        <label class="settings-field">
           <span data-i18n="settings.display_name_label">Display name</span>
-          <input id="display-name" class="input" type="text" maxlength="80" placeholder="Your display name" data-i18n-placeholder="settings.display_name_placeholder" style="max-width:320px">
+          <input id="display-name" class="input" type="text" maxlength="80" placeholder="Your display name" data-i18n-placeholder="settings.display_name_placeholder">
         </label>
-        <label class="flex ai-c" style="gap:8px; flex-wrap:wrap">
+        <label class="settings-field">
           <span data-i18n="settings.locale_label">Default language</span>
-          <select id="locale" class="input" style="max-width:220px">
+          <select id="locale" class="input">
             <option value="" data-i18n="settings.locale_option_auto">Auto (unset)</option>
             <option value="bg">Български (Bulgarian)</option>
             <option value="hr">Hrvatski (Croatian)</option>

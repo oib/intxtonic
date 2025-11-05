@@ -413,7 +413,7 @@
           currentHandle = data.handle;
           userHeading.textContent = `@${data.handle} (${data.account_id})`;
           const items = Array.isArray(data.tags) ? data.tags : [];
-          const html = items.length ? items.map(item => `
+          let html = items.length ? items.map(item => `
             <div class="flex ai-c jc-b" style="padding:6px 0; border-bottom:1px solid rgba(185,236,255,.12)">
               <div><span class="badge">#${item.slug}</span> ${item.label || ''}</div>
               <button class="btn btn--ghost" data-tag-id="${item.tag_id}">Remove</button>

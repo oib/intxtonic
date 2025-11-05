@@ -60,7 +60,20 @@ async def list_reports(
         async with conn.cursor() as cur:
             # Get total count of reports
             await cur.execute(
-                "SELECT COUNT(*) FROM app.moderation_actions WHERE action = 'report'"
+                """
+                SELECT COUNT(*)
+                FROM app.moderation_actions ma
+                LEFT JOIN app.posts p
+                    ON ma.target_type = 'post' AND p.id = ma.target_id
+                LEFT JOIN app.replies r
+                    ON ma.target_type = 'reply' AND r.id = ma.target_id
+                WHERE ma.action = 'report'
+                  AND (
+                    (ma.target_type = 'post' AND p.id IS NOT NULL AND p.deleted_at IS NULL)
+                    OR (ma.target_type = 'reply' AND r.id IS NOT NULL AND r.deleted_at IS NULL)
+                    OR (ma.target_type NOT IN ('post', 'reply'))
+                  )
+                """
             )
             total = (await cur.fetchone())[0]
 
@@ -70,7 +83,14 @@ async def list_reports(
                 SELECT ma.id, ma.target_type, ma.target_id, ma.reason, a.handle AS reported_by, ma.created_at
                 FROM app.moderation_actions ma
                 LEFT JOIN app.accounts a ON a.id = ma.actor_id
+                LEFT JOIN app.posts p ON ma.target_type = 'post' AND p.id = ma.target_id
+                LEFT JOIN app.replies r ON ma.target_type = 'reply' AND r.id = ma.target_id
                 WHERE ma.action = 'report'
+                  AND (
+                    (ma.target_type = 'post' AND p.id IS NOT NULL AND p.deleted_at IS NULL)
+                    OR (ma.target_type = 'reply' AND r.id IS NOT NULL AND r.deleted_at IS NULL)
+                    OR (ma.target_type NOT IN ('post', 'reply'))
+                  )
                 ORDER BY ma.created_at DESC
                 LIMIT %s OFFSET %s
                 """,

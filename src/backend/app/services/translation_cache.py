@@ -4,6 +4,8 @@ from typing import Optional
 
 from psycopg import AsyncConnection
 
+from .language_utils import language_label, normalize_code
+
 
 async def fetch_translation(
     conn: AsyncConnection,
@@ -44,6 +46,18 @@ async def store_translation(
     summary_md: Optional[str] = None,
     model_name: Optional[str] = None,
 ) -> None:
+    normalized_lang = normalize_code(target_lang)
+    if normalized_lang:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                """
+                INSERT INTO app.languages (code, label)
+                VALUES (%s, %s)
+                ON CONFLICT (code) DO NOTHING
+                """,
+                (normalized_lang, language_label(normalized_lang)),
+            )
+
     async with conn.cursor() as cur:
         await cur.execute(
             """

@@ -59,7 +59,7 @@ nav > #logout-btn{ margin-left:auto; }
 /* Inputs */
 .input{ width:100%; background:#0e1319; color:var(--tx-0);
   border:1px solid rgba(185,236,255,.18); border-radius:var(--r-1);
-  padding:12px 14px; }
+  padding:4px 14px; }
 .input::placeholder{ color:#6f7b86; }
 
 /* Badges */

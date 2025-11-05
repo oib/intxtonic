@@ -83,14 +83,8 @@
 <body>
   <header class="site">
     <div class="inner container flex ai-c jc-b">
-      <div class="flex ai-c" style="gap:8px">
-        <a class="btn btn--subtle" href="/home" data-i18n="nav.home">Home</a>
-        <a id="admin-link" class="btn btn--subtle" href="/admin" style="display:none" data-i18n="nav.admin">Admin</a>
-      </div>
+      <a class="btn btn--subtle" href="/home" data-i18n="nav.home">Home</a>
       <nav class="flex ai-c" style="gap:8px">
-        <a id="dashboard-link" class="btn btn--subtle" href="/dashboard/">Dashboard</a>
-        <a id="profile-link" class="btn btn--subtle" href="#" style="display:none">Profile</a>
-        <a id="login-link" class="btn btn--subtle" href="/login/">Login</a>
         <button id="logout-btn" class="btn btn--ghost" style="display:none">Logout</button>
       </nav>
     </div>
@@ -174,39 +168,16 @@
     } catch { window.location.href = '/login'; }
 
     // Header auth UI
-    const loginLink = document.getElementById('login-link');
     const logoutBtn = document.getElementById('logout-btn');
-    const profileLink = document.getElementById('profile-link');
-    const dashboardLink = document.getElementById('dashboard-link');
-    const adminLink = document.getElementById('admin-link');
+    const adminTagLink = document.getElementById('admin-tag-link');
 
     function refreshAuthUI(){
       const has = !!getToken();
-      loginLink.style.display = has ? 'none' : 'inline-flex';
-      logoutBtn.style.display = has ? 'inline-flex' : 'none';
-      if (dashboardLink) dashboardLink.style.display = has ? 'inline-flex' : 'none';
-      if (profileLink) {
-        const defaultLabel = profileLink.dataset.defaultLabel || profileLink.textContent || 'Profile';
-        profileLink.dataset.defaultLabel = defaultLabel;
-        profileLink.textContent = defaultLabel;
-        profileLink.style.display = 'none';
-      }
-      if (has) {
+      if (logoutBtn) logoutBtn.style.display = has ? 'inline-flex' : 'none';
+      if (adminTagLink) {
         const u = currentUser;
-        if (u && u.handle && profileLink) {
-          profileLink.href = `/user/${encodeURIComponent(u.handle)}`;
-          const label = (u.display_name || u.handle || '').trim();
-          if (label) profileLink.textContent = label;
-          profileLink.style.display = 'inline-flex';
-        }
-        const adminTagLink = document.getElementById('admin-tag-link');
-        if (u && (u.is_admin || (Array.isArray(u.roles) && u.roles.includes('admin')))) {
-          if (adminLink) adminLink.style.display = 'inline-flex';
-          if (adminTagLink) adminTagLink.style.display = 'flex';
-        } else {
-          if (adminLink) adminLink.style.display = 'none';
-          if (adminTagLink) adminTagLink.style.display = 'none';
-        }
+        const isAdmin = u && (u.is_admin || (Array.isArray(u.roles) && u.roles.includes('admin')));
+        adminTagLink.style.display = isAdmin ? 'flex' : 'none';
       }
     }
     refreshAuthUI();

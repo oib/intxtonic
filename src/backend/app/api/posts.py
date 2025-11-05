@@ -847,7 +847,7 @@ async def attach_tag(
             if not is_owner:
                 raise HTTPException(status_code=403, detail="only the author can modify tags")
             # find tag and ensure not banned
-            await cur.execute("SELECT id, is_banned FROM app.tags WHERE slug=%s", (slug,))
+            await cur.execute("SELECT id, is_banned, is_restricted FROM app.tags WHERE slug=%s", (slug,))
             row = await cur.fetchone()
             if not row:
                 label = (body.label or raw_slug or slug).strip()
@@ -858,19 +858,26 @@ async def attach_tag(
                     INSERT INTO app.tags (id, slug, label, domain, is_restricted, created_by_admin)
                     VALUES (gen_random_uuid(), %s, %s, 'user_created', false, false)
                     ON CONFLICT (slug) DO NOTHING
-                    RETURNING id, is_banned
-                    """,
+                    RETURNING id, is_banned, is_restricted
+                    """
                     (slug, label),
                 )
                 row = await cur.fetchone()
                 if not row:
-                    await cur.execute("SELECT id, is_banned FROM app.tags WHERE slug=%s", (slug,))
+                    await cur.execute("SELECT id, is_banned, is_restricted FROM app.tags WHERE slug=%s", (slug,))
                     row = await cur.fetchone()
                 if not row:
                     raise HTTPException(status_code=500, detail="failed to create tag")
-            tag_id, is_banned = row[0], row[1]
+            tag_id, is_banned, is_restricted = row[0], row[1], row[2]
             if is_banned:
                 raise HTTPException(status_code=403, detail="tag is banned")
+            if is_restricted:
+                is_admin = await is_admin_account(pool, account_id)
+                if not is_admin:
+                    _, accessible_slugs = await fetch_accessible_tag_sets(pool, account_id)
+                    allowed_slugs = {s.lower() for s in accessible_slugs}
+                    if slug.lower() not in allowed_slugs:
+                        raise HTTPException(status_code=403, detail="tag is restricted")
             # enforce max 7 tags per post
             await cur.execute("SELECT COUNT(*) FROM app.post_tags WHERE post_id=%s", (post_id,))
             cnt = (await cur.fetchone())[0]
@@ -987,7 +994,9 @@ async def get_post(post_id: str, account_id: str = Depends(get_current_account_i
             )
             tags = await cur.fetchall()
 
-    if tags:
+    is_admin = await is_admin_account(pool, account_id)
+
+    if tags and not is_admin:
         _, accessible_slugs = await fetch_accessible_tag_sets(pool, account_id)
         for tag_row in tags:
             tag_slug = tag_row[1]

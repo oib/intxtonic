@@ -1,10 +1,13 @@
 import os
+import shutil
 import subprocess
 import json
 import logging
+from functools import lru_cache
 from pathlib import Path
 
 from ..core.config import get_settings
+from .language_utils import language_label as _shared_language_label
 
 
 logger = logging.getLogger(__name__)
@@ -33,29 +36,31 @@ if not _CLI_PATH.exists():
         raise FileNotFoundError(f"ollama_cli.mjs not found at {_CLI_PATH} or {candidate}")
 
 
-_LANGUAGE_LABELS = {
-    "en": "English",
-    "de": "German",
-    "fr": "French",
-    "es": "Spanish",
-    "it": "Italian",
-    "pt": "Portuguese",
-    "ja": "Japanese",
-    "ko": "Korean",
-    "zh": "Chinese",
-    "ru": "Russian",
-    "nl": "Dutch",
-    "sv": "Swedish",
-    "fi": "Finnish",
-    "pl": "Polish",
-}
+@lru_cache(maxsize=1)
+def _resolve_node_command() -> str:
+    env_override = (
+        os.getenv("NODE_BIN")
+        or os.getenv("NODE_PATH")
+        or os.getenv("OLLAMA_NODE_BIN")
+        or ""
+    ).strip()
+
+    candidates: list[str] = []
+    if env_override:
+        candidates.append(env_override)
+    candidates.extend(["node", "nodejs"])
+
+    for candidate in candidates:
+        if candidate and shutil.which(candidate):
+            return candidate
+
+    raise FileNotFoundError(
+        "Node.js executable not found. Install Node.js or set NODE_BIN to the Node.js binary path."
+    )
 
 
 def _language_label(code: str) -> str:
-    if not code:
-        return "English"
-    norm = code.split("-")[0].lower()
-    return _LANGUAGE_LABELS.get(norm, code)
+    return _shared_language_label(code)
 
 
 def split_text_into_chunks(text: str, max_chars: int = 1200) -> list[str]:
@@ -131,6 +136,11 @@ async def translate_text(
         translated_chunks: list[str] = []
         first_prompt: str | None = None
         chunks = split_text_into_chunks(text or "")
+        try:
+            node_command = _resolve_node_command()
+        except FileNotFoundError as resolve_exc:
+            _FILE_LOGGER.error("node resolution failed: %s", str(resolve_exc), exc_info=True)
+            raise Exception(str(resolve_exc)) from resolve_exc
         logger.debug(
             "Translating %d chunk(s) for target language %s", len(chunks), target_language
         )
@@ -162,7 +172,7 @@ async def translate_text(
                 len(chunk),
             )
             result = subprocess.run(
-                ['node', str(_CLI_PATH), json.dumps(sequence)],
+                [node_command, str(_CLI_PATH), json.dumps(sequence)],
                 capture_output=True,
                 text=True,
                 env=env,
@@ -232,8 +242,14 @@ async def summarize_text(text: str, language: str) -> str:
         if model:
             env['OLLAMA_MODEL'] = model
 
+        try:
+            node_command = _resolve_node_command()
+        except FileNotFoundError as resolve_exc:
+            _FILE_LOGGER.error("node resolution failed during summarize: %s", str(resolve_exc), exc_info=True)
+            raise Exception(str(resolve_exc)) from resolve_exc
+
         result = subprocess.run(
-            ['node', str(_CLI_PATH), json.dumps(sequence)],
+            [node_command, str(_CLI_PATH), json.dumps(sequence)],
             capture_output=True,
             text=True,
             env=env,
