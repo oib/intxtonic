@@ -760,9 +760,6 @@ async def cast_vote(
                     """,
                     (account_id, body.target_id, body.value),
                 )
-                gger.info(
-                  f"Vote recorded for account_id={account_id}, target_type={body.target_type}, target_id={body.target_id}, value={body.value}"
-                
                 await cur.execute(
                     "UPDATE app.posts SET score = COALESCE(score,0) + %s WHERE id=%s",
                     (body.value, body.target_id),
