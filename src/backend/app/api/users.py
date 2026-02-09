@@ -522,7 +522,7 @@ async def get_user_replies(
                 }
                 for x in rows
             ]
-            logger.info(f"Fetched {len(items)} replies for user {handle}")
+            # logger.info(f"Fetched {len(items)} replies for user {handle}")
             return {"items": items, "limit": limit, "offset": offset, "total": total}
 
 

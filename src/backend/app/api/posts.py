@@ -760,9 +760,9 @@ async def cast_vote(
                     """,
                     (account_id, body.target_id, body.value),
                 )
-                logger.info(
-                    f"Vote recorded for account_id={account_id}, target_type={body.target_type}, target_id={body.target_id}, value={body.value}"
-                )
+                gger.info(
+                  f"Vote recorded for account_id={account_id}, target_type={body.target_type}, target_id={body.target_id}, value={body.value}"
+                
                 await cur.execute(
                     "UPDATE app.posts SET score = COALESCE(score,0) + %s WHERE id=%s",
                     (body.value, body.target_id),
@@ -1045,7 +1045,7 @@ async def list_post_tags(post_id: str, account_id: str = Depends(get_current_acc
 
 @router.get("/{post_id}/replies", response_model=List[ReplyOut])
 async def list_replies(post_id: str, limit: int = 100, offset: int = 0, account_id: str = Depends(get_current_account_id), pool = Depends(get_pool)):
-    logger.info(f"Fetching replies for post_id={post_id}, user={account_id}, limit={limit}, offset={offset}")
+    # logger.info(f"Fetching replies for post_id={post_id}, user={account_id}, limit={limit}, offset={offset}")
     try:
         # Check if post exists first
         async with pool.connection() as conn:
@@ -1066,7 +1066,7 @@ async def list_replies(post_id: str, limit: int = 100, offset: int = 0, account_
             async with conn.cursor() as cur:
                 await cur.execute(sql, (post_id, limit, offset))
                 rows = await cur.fetchall()
-                logger.info(f"Replies query returned {len(rows)} rows for post_id={post_id}")
+                # logger.info(f"Replies query returned {len(rows)} rows for post_id={post_id}")
         return [
             {
                 "id": str(r[0]),

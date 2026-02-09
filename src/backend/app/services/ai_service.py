@@ -141,12 +141,12 @@ async def translate_text(
         except FileNotFoundError as resolve_exc:
             _FILE_LOGGER.error("node resolution failed: %s", str(resolve_exc), exc_info=True)
             raise Exception(str(resolve_exc)) from resolve_exc
-        logger.debug(
-            "Translating %d chunk(s) for target language %s", len(chunks), target_language
-        )
-        _FILE_LOGGER.info(
-            "start translation chunks=%d target=%s", len(chunks), target_language
-        )
+        # logger.debug(
+        #     "Translating %d chunk(s) for target language %s", len(chunks), target_language
+        # )
+        # _FILE_LOGGER.info(
+        #     "start translation chunks=%d target=%s", len(chunks), target_language
+        # )
 
         for idx, chunk in enumerate(chunks):
             prompt = (
@@ -159,18 +159,6 @@ async def translate_text(
                 f'user: {prompt}'
             ]
 
-            logger.debug(
-                "Submitting chunk %d/%d for translation (chars=%d)",
-                idx + 1,
-                len(chunks),
-                len(chunk),
-            )
-            _FILE_LOGGER.info(
-                "chunk submit index=%d total=%d chars=%d",
-                idx + 1,
-                len(chunks),
-                len(chunk),
-            )
             result = subprocess.run(
                 [node_command, str(_CLI_PATH), json.dumps(sequence)],
                 capture_output=True,
@@ -184,18 +172,18 @@ async def translate_text(
 
             output = result.stdout.strip()
             translated_chunks.append(output)
-            logger.debug(
-                "Received translation for chunk %d/%d (chars=%d)",
-                idx + 1,
-                len(chunks),
-                len(output),
-            )
-            _FILE_LOGGER.info(
-                "chunk complete index=%d total=%d chars=%d",
-                idx + 1,
-                len(chunks),
-                len(output),
-            )
+            # logger.debug(
+            #     "Received translation for chunk %d/%d (chars=%d)",
+            #     idx + 1,
+            #     len(chunks),
+            #     len(output),
+            # )
+            # _FILE_LOGGER.info(
+            #     "chunk complete index=%d total=%d chars=%d",
+            #     idx + 1,
+            #     len(chunks),
+            #     len(output),
+            # )
             if idx == 0 and return_prompt:
                 first_prompt = prompt
 

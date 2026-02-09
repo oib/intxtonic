@@ -182,7 +182,7 @@ async def main() -> None:
     pool = AsyncConnectionPool(conninfo=settings.database_url, max_size=10, num_workers=3, open=False)
     await pool.open()
 
-    logger.info("Translation worker started")
+    # logger.info("Translation worker started")
     try:
         await worker_loop(redis, pool)
     finally:
