@@ -8,7 +8,7 @@ Multilingual, tag‑centric social forum and blogging platform.
 
 ## Live site
 
-- **Visit the live site**: https://soultribe.chat
+- **Visit the live site**: https://intxtonic.net/
 
 For detailed setup, database, and deployment instructions, see:
 
