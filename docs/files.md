@@ -148,16 +148,19 @@ This document lists every file in the repository with a short purpose descriptio
 | File | Purpose |
 |------|---------|
 | `env/.env.example` | Template for runtime `.env` (DB, Redis, secrets). |
+| `nginx/nginx.conf.example` | Nginx reverse‑proxy example with HSTS. |
+| `systemd/langsum-gunicorn.user.service.example` | Systemd user service template for Gunicorn. |
+
+## `scripts/`
+| File | Purpose |
+|------|---------|
+| `send_test_email.py` | Send a test email (SMTP validation). |
 
 ## `dev/`
 | File | Purpose |
 |------|---------|
 | `scripts/dev_run.sh` | Convenience script to start the app in dev mode. |
-| `scripts/send_test_email.py` | Send a test email (SMTP validation). |
-| `templates/` | Deployment templates (systemd user service, Nginx config). |
 | `tests/` | Pytest test suite (auth, posts, tags, users, rate limits). |
-| `logs/` | Development logs (not tracked in production). |
-| `intxtonic.sql` | Full database dump (legacy; prefer schema + seeds). |
 
 ## `docs/`
 | File | Purpose |
@@ -189,14 +192,13 @@ This document lists every file in the repository with a short purpose descriptio
 | `dev/logs/translation-debug.log` | Large debug log; should not be tracked. |
 | `docs/bootstrap/` | Outdated bootstrap docs; no longer referenced. |
 | `docs/export/` | Empty placeholder directory. |
-| `src/frontend/uploads/` | Runtime uploads; should not be tracked (contains user images). |
 
 ### Files in wrong locations that should be moved and rewired
 | Path | Suggested new location | Notes |
 |------|------------------------|-------|
-| `dev/templates/nginx-config-with-hsts.conf` | `config/nginx/nginx.conf.example` | Keep config templates together. |
-| `dev/templates/langsum-gunicorn.user.service` | `config/systemd/langsum-gunicorn.user.service.example` | Keep deployment configs together. |
-| `dev/scripts/send_test_email.py` | `scripts/send_test_email.py` (root) | General helper, not strictly dev. |
+| `dev/templates/nginx-config-with-hsts.conf` | Already moved to `config/nginx/nginx.conf.example`. |
+| `dev/templates/langsum-gunicorn.user.service` | Already moved to `config/systemd/langsum-gunicorn.user.service.example`. |
+| `dev/scripts/send_test_email.py` | Already moved to `scripts/send_test_email.py` (root). |
 | `dev/logs/` | Should be git‑ignored and not tracked. | |
 
 ### Empty folders to delete
@@ -206,6 +208,9 @@ This document lists every file in the repository with a short purpose descriptio
 | `src/frontend/uploads/` | Runtime uploads; should be git‑ignored and not tracked. |
 | `src/__pycache__/`, `src/backend/app/__pycache__/`, `src/backend/app/api/__pycache__/`, `src/backend/app/core/__pycache__/`, `src/backend/app/db/__pycache__/`, `src/backend/app/schemas/__pycache__/`, `src/backend/app/services/__pycache__/`, `src/backend/app/workers/__pycache__/` | Python bytecode cache; should be ignored. |
 | `dev/tests/__pycache__/` | Same as above. |
+| `dev/templates/` | Empty after moving templates. |
+| `dev/scripts/` | Empty after moving send_test_email.py. |
+| `dev/logs/` | Empty after removing debug log. |
 
 ### Gitignore additions to prevent tracking unwanted files
 Add to `.gitignore` if not already present:

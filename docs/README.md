@@ -108,11 +108,11 @@ bash scripts/dev_run.sh
   - `POST /tags/{id}/unban` — Unban a tag (admin only).
 
 ## Deployment (user-level systemd)
-- Template at `dev/templates/langsum-gunicorn.user.service`
+- Template at `config/systemd/langsum-gunicorn.user.service.example`
 - Steps:
 ```bash
 mkdir -p ~/.config/systemd/user
-cp dev/templates/langsum-gunicorn.user.service ~/.config/systemd/user/langsum-gunicorn.service
+cp config/systemd/langsum-gunicorn.user.service.example ~/.config/systemd/user/langsum-gunicorn.service
 systemctl --user daemon-reload
 systemctl --user enable langsum-gunicorn.service
 systemctl --user start langsum-gunicorn.service
