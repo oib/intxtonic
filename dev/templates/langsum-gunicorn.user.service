@@ -18,6 +18,7 @@ ExecStart=%h/windsurf/LangSum/.venv/bin/gunicorn \
   --workers 2 \
   --threads 2 \
   --bind 0.0.0.0:8002 \
+  --forwarded-allow-ips="*" \
   --timeout 60 \
   --access-logfile - \
   --error-logfile - \

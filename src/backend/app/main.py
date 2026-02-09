@@ -1,5 +1,9 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
+try:
+    from starlette.middleware.proxy_headers import ProxyHeadersMiddleware
+except ModuleNotFoundError:  # pragma: no cover - depends on Starlette version
+    from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from starlette.staticfiles import StaticFiles
 from pathlib import Path
 from starlette.responses import RedirectResponse, FileResponse, HTMLResponse
@@ -55,6 +59,8 @@ app.add_middleware(
     expose_headers=["*"],
     max_age=3600,
 )
+
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
 
 @app.middleware("http")

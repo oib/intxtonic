@@ -28,4 +28,5 @@ PORT="${APP_PORT:-8002}"
 exec uvicorn src.backend.app.main:app \
   --host 127.0.0.1 \
   --port "$PORT" \
+  --forwarded-allow-ips="*" \
   --reload
