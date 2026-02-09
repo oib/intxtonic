@@ -77,18 +77,18 @@ async def list_posts(
     account_id: str = Depends(get_current_account_id),
     pool = Depends(get_pool),
 ):
-    logger.info(
-        "List posts request",
-        extra={
-            "limit": limit,
-            "offset": offset,
-            "cursor": cursor,
-            "sort": sort,
-            "tags": tag,
-            "query": q,
-            "account_id": account_id,
-        },
-    )
+    # logger.info(
+    #     "List posts request",
+    #     extra={
+    #         "limit": limit,
+    #         "offset": offset,
+    #         "cursor": cursor,
+    #         "sort": sort,
+    #         "tags": tag,
+    #         "query": q,
+    #         "account_id": account_id,
+    #     },
+    # )
     
     # Validate/normalize cursor if provided; be lenient and ignore invalid
     if cursor:
@@ -732,9 +732,9 @@ async def cast_vote(
         raise HTTPException(status_code=422, detail="invalid target_type")
     if body.value not in (-1, 1):
         raise HTTPException(status_code=422, detail="invalid value")
-    logger.info(
-        f"Vote attempt: account_id={account_id}, target_type={body.target_type}, target_id={body.target_id}, value={body.value}"
-    )
+    # logger.info(
+    #     f"Vote attempt: account_id={account_id}, target_type={body.target_type}, target_id={body.target_id}, value={body.value}"
+    # )
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
             if body.target_type == "post":
@@ -748,9 +748,9 @@ async def cast_vote(
                 )
                 existing = await cur.fetchone()
                 if existing:
-                    logger.info(
-                        f"Existing vote found for account_id={account_id}, target_type={body.target_type}, target_id={body.target_id}"
-                    )
+                    # logger.info(
+                    #     f"Existing vote found for account_id={account_id}, target_type={body.target_type}, target_id={body.target_id}"
+                    # )
                     raise HTTPException(status_code=409, detail="already voted on this post")
                 await cur.execute(
                     """
