@@ -514,6 +514,19 @@
     document.getElementById('image-alt')?.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') e.preventDefault();
     });
+    // The API answers errors as {"error":{"message":…}} (older routes: {"detail":…}).
+    // Show that text so "Title too long" or "Daily post limit reached" reaches the user.
+    async function apiErrorMessage(res, fallback){
+      const txt = await res.text().catch(() => '');
+      let msg = '';
+      try {
+        const j = JSON.parse(txt);
+        msg = j?.error?.message || (typeof j?.detail === 'string' ? j.detail : '');
+      } catch { /* not JSON */ }
+      msg = String(msg || '').trim();
+      return msg ? msg.slice(0, 200) : fallback;
+    }
+
     const elForm = document.getElementById('create-form');
     elForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -532,7 +545,14 @@
           window.location.href = '/login';
           return;
         }
-        if (!res.ok) throw new Error(await res.text());
+        if (!res.ok) {
+          const msg = await apiErrorMessage(res, `Publish failed (HTTP ${res.status})`);
+          elMsg.textContent = msg;
+          elMsg.style.display = 'inline-block';
+          showToast(msg, 'err');
+          elBtnPublish.disabled = false;
+          return;
+        }
         const data = await res.json();
         showToast('Post published','ok');
         if (data?.id) {
@@ -549,7 +569,8 @@
         elMsg.style.display = 'inline-block';
         elBtnPublish.disabled = false;
       } catch (err) {
-        elMsg.textContent = 'Publish failed';
+        // Network error or unreadable response
+        elMsg.textContent = 'Publish failed: could not reach the server';
         elMsg.style.display = 'inline-block';
         showToast('Publish failed','err');
         elBtnPublish.disabled = false;

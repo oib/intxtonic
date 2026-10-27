@@ -6,6 +6,25 @@ import { showToast } from './toast.js';
 const JOB_POLL_INTERVAL_MS = 2000;
 const JOB_POLL_TIMEOUT_MS = 120000;
 
+function escapeHTML(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// The API answers errors as {"error":{"message":…}} (older routes: {"detail":…}).
+// Fall back to a short status line instead of dumping raw JSON or an HTML error page.
+async function readError(res) {
+  const txt = await res.text().catch(() => '');
+  let msg = '';
+  try {
+    const j = JSON.parse(txt);
+    msg = j?.error?.message || (typeof j?.detail === 'string' ? j.detail : '');
+  } catch { /* not JSON */ }
+  msg = String(msg || '').trim();
+  return msg ? msg.slice(0, 200) : `HTTP ${res.status}`;
+}
+
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -45,8 +64,7 @@ async function pollJob(jobId) {
         return { status: 'not_found' };
       }
       if (!res.ok) {
-        const msg = await res.text().catch(() => '');
-        return { status: 'failed', error: msg || `HTTP ${res.status}` };
+        return { status: 'failed', error: await readError(res) };
       }
       const data = await res.json().catch(() => ({}));
       const status = normalizeStatus(data.status);
@@ -137,7 +155,7 @@ export async function translatePost(postId) {
       throw new Error('Translation job ended unexpectedly');
     }
     if (!response.ok) {
-      throw new Error(await response.text());
+      throw new Error(await readError(response));
     }
     const data = await response.json();
     showToast('Post translated', 'ok');
@@ -194,7 +212,7 @@ export async function summarizePost(postId, opts = {}) {
       throw new Error('Summarization job ended unexpectedly');
     }
     if (!response.ok) {
-      throw new Error(await response.text());
+      throw new Error(await readError(response));
     }
     const data = await response.json();
     showToast('Post summarized', 'ok');
@@ -205,11 +223,14 @@ export async function summarizePost(postId, opts = {}) {
   }
 }
 
+// AI output is untrusted text: escape it first, then turn newlines into <br>.
+// (Inserting it unescaped let a translation or summary containing markup run
+// script or break the page.)
 function formatWithLineBreaks(text) {
-  return (text || '')
+  return String(text ?? '')
     .replace(/\r\n/g, '\n')
     .split('\n')
-    .map(line => line.trim().length ? line : '')
+    .map(line => line.trim().length ? escapeHTML(line) : '')
     .map(line => (line ? line : '<br>'))
     .join('<br>');
 }
@@ -250,12 +271,7 @@ export function bindAIActions(container) {
             translatedBlock.style.marginTop = '8px';
             postElement.appendChild(translatedBlock);
           }
-          const withBreaks = (result.translated_text || '')
-            .replace(/\r\n/g, '\n')
-            .split('\n')
-            .map(line => line.trim().length ? line : '')
-            .map(line => line ? line : '<br>')
-            .join('<br>');
+          const withBreaks = formatWithLineBreaks(result.translated_text);
           translatedBlock.innerHTML = `<strong>Translated:</strong><br>${withBreaks}`;
         }
       }
@@ -303,18 +319,41 @@ export function bindPostPageAIActions(postId) {
   const summaryContent = document.getElementById('post-summary');
   let lastTranslation = null;
 
+  // Summarize works on the translation, so it stays disabled until one exists.
+  // A disabled button gives no reason by itself, so show one next to it.
+  let summarizeHint = null;
+  if (summarizeBtn) {
+    summarizeHint = document.createElement('span');
+    summarizeHint.id = 'summarize-hint';
+    summarizeHint.className = 'hint';
+    summarizeHint.style.fontSize = '0.85rem';
+    summarizeBtn.insertAdjacentElement('afterend', summarizeHint);
+    summarizeBtn.setAttribute('aria-describedby', summarizeHint.id);
+  }
+  function updateSummarizeState(translating = false) {
+    const enabled = !translating && !!lastTranslation;
+    setButtonEnabled(summarizeBtn, enabled);
+    if (!summarizeBtn || !summarizeHint) return;
+    const reason = translating
+      ? 'Available once the translation is ready.'
+      : (enabled ? '' : 'Translate the post first, then summarize the translation.');
+    summarizeHint.textContent = reason;
+    summarizeHint.hidden = !reason;
+    if (reason) summarizeBtn.title = reason; else summarizeBtn.removeAttribute('title');
+  }
+
   const existingTranslation = extractPlainText(translationContent);
   if (existingTranslation) {
     lastTranslation = existingTranslation;
     if (translationSection) translationSection.style.display = 'block';
   }
 
-  setButtonEnabled(summarizeBtn, !!lastTranslation);
+  updateSummarizeState();
 
   if (translateBtn) {
     translateBtn.addEventListener('click', async () => {
       setButtonLoading(translateBtn, 'Translating…');
-      setButtonEnabled(summarizeBtn, false);
+      updateSummarizeState(true);
       let result = null;
       try {
         result = await translatePost(postId);
@@ -341,7 +380,7 @@ export function bindPostPageAIActions(postId) {
       if (!lastTranslation && existingTranslation) {
         lastTranslation = existingTranslation;
       }
-      setButtonEnabled(summarizeBtn, !!lastTranslation);
+      updateSummarizeState();
     });
   }
 
