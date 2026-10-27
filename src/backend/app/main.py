@@ -7,6 +7,7 @@ except ModuleNotFoundError:  # pragma: no cover - depends on Starlette version
 from starlette.staticfiles import StaticFiles
 from pathlib import Path
 from starlette.responses import RedirectResponse, FileResponse, HTMLResponse
+import re
 from fastapi.middleware.cors import CORSMiddleware
 
 from .core.config import get_settings
@@ -118,6 +119,40 @@ _PROJECT_ROOT = _project_root_from_here()
 # Serve uploaded files from absolute path to align with upload saver
 app.mount("/uploads", StaticFiles(directory=str(_PROJECT_ROOT / "src" / "frontend" / "uploads")), name="uploads")
 
+_ASSET_VERSION: str | None = None
+
+
+def _asset_version() -> str:
+    global _ASSET_VERSION
+    if _ASSET_VERSION is None:
+        try:
+            import subprocess
+            _ASSET_VERSION = subprocess.check_output(
+                ["git", "rev-parse", "--short", "HEAD"], cwd=_PROJECT_ROOT
+            ).decode().strip() or "dev"
+        except Exception:
+            _ASSET_VERSION = "dev"
+    return _ASSET_VERSION
+
+
+_ASSET_URL_RE = re.compile(r"/src/frontend/[^'\"<>\s#?]+(\?[^'\"<>\s#]*)?")
+
+
+def page_response(page_path: str) -> HTMLResponse:
+    """Serve an HTML page with ?v=<commit> stamped on /src/frontend asset URLs.
+
+    Ensures browsers fetch fresh CSS/JS after each deploy instead of relying
+    on heuristic caching of unversioned URLs.
+    """
+    html = (_PROJECT_ROOT / page_path).read_text(encoding="utf-8")
+
+    def _stamp(m: re.Match) -> str:
+        if m.group(1):  # already has a query string, leave untouched
+            return m.group(0)
+        return f"{m.group(0)}?v={_asset_version()}"
+
+    return HTMLResponse(_ASSET_URL_RE.sub(_stamp, html))
+
 _FEATURE_PAGES = {
     "translation-engine": "src/frontend/pages/features/translation-engine.html",
     "ui-localization": "src/frontend/pages/features/ui-localization.html",
@@ -132,12 +167,12 @@ _FEATURE_PAGES = {
 
 @app.get("/")
 def landing_page():
-    return FileResponse("src/frontend/pages/index.html")
+    return page_response("src/frontend/pages/index.html")
 
 
 @app.get("/features/")
 def features_index_page():
-    return FileResponse("src/frontend/pages/features/index.html")
+    return page_response("src/frontend/pages/features/index.html")
 
 
 @app.get("/features/{slug}.html")
@@ -145,7 +180,7 @@ def features_detail_page(slug: str):
     page_path = _FEATURE_PAGES.get(slug)
     if not page_path:
         raise HTTPException(status_code=404, detail="Feature page not found")
-    return FileResponse(page_path)
+    return page_response(page_path)
 
 # Register API routers BEFORE clean URL frontend routes to ensure specific API
 # endpoints (e.g., /tags/usage) are not shadowed by catch-all page routes like
@@ -176,103 +211,103 @@ async def home_page(request: Request):
         await get_current_account_id(request)
     except HTTPException:
         return RedirectResponse(url="/", status_code=307)
-    return FileResponse("src/frontend/pages/home.html")
+    return page_response("src/frontend/pages/home.html")
 
 
 @app.get("/dashboard")
 def dashboard_page():
-    return FileResponse("src/frontend/pages/dashboard.html")
+    return page_response("src/frontend/pages/dashboard.html")
 
 
 @app.get("/login")
 def login_page():
-    return FileResponse("src/frontend/pages/login.html")
+    return page_response("src/frontend/pages/login.html")
 
 
 @app.get("/register")
 def register_page():
-    return FileResponse("src/frontend/pages/register.html")
+    return page_response("src/frontend/pages/register.html")
 
 
 @app.get("/confirm-email")
 def confirm_email_page():
-    return FileResponse("src/frontend/pages/confirm-email.html")
+    return page_response("src/frontend/pages/confirm-email.html")
 
 
 @app.get("/magic-login")
 def magic_login_page():
-    return FileResponse("src/frontend/pages/magic-login.html")
+    return page_response("src/frontend/pages/magic-login.html")
 
 
 @app.get("/reset-password")
 def reset_password_page():
-    return FileResponse("src/frontend/pages/reset-password.html")
+    return page_response("src/frontend/pages/reset-password.html")
 
 @app.get("/set-password")
 def set_password_page():
-    return FileResponse("src/frontend/pages/set-password.html")
+    return page_response("src/frontend/pages/set-password.html")
 
 
 @app.get("/post/{post_id}")
 def post_page(post_id: str):
-    return FileResponse("src/frontend/pages/post.html")
+    return page_response("src/frontend/pages/post.html")
 
 
 @app.get("/user/settings")
 def settings_page():
-    return FileResponse("src/frontend/pages/settings.html")
+    return page_response("src/frontend/pages/settings.html")
 
 
 @app.get("/user/{handle}")
 def user_page(handle: str):
-    return FileResponse("src/frontend/pages/user.html")
+    return page_response("src/frontend/pages/user.html")
 
 
 @app.get("/admin")
 def admin_page():
-    return FileResponse("src/frontend/pages/admin.html")
+    return page_response("src/frontend/pages/admin.html")
 
 
 @app.get("/admin/users")
 def admin_users_page():
-    return FileResponse("src/frontend/pages/admin-users.html")
+    return page_response("src/frontend/pages/admin-users.html")
 
 
 @app.get("/admin/tags")
 def admin_tags_page():
-    return FileResponse("src/frontend/pages/admin-tags.html")
+    return page_response("src/frontend/pages/admin-tags.html")
 
 
 @app.get("/admin/moderation")
 def admin_moderation_page():
-    return FileResponse("src/frontend/pages/admin-moderation.html")
+    return page_response("src/frontend/pages/admin-moderation.html")
 
 
 @app.get("/admin/queue")
 def admin_queue_page():
-    return FileResponse("src/frontend/pages/admin-queue.html")
+    return page_response("src/frontend/pages/admin-queue.html")
 
 
 @app.get("/create")
 def create_post_page():
-    return FileResponse("src/frontend/pages/create.html")
+    return page_response("src/frontend/pages/create.html")
 
 
 @app.get("/tags/top")
 def tags_top_page():
-    return FileResponse("src/frontend/pages/tagstop.html")
+    return page_response("src/frontend/pages/tagstop.html")
 
 
 @app.get("/tags/{slug}")
 def tag_page(slug: str):
-    return FileResponse("src/frontend/pages/tags.html")
+    return page_response("src/frontend/pages/tags.html")
 
 
 @app.get("/admin/i18n")
 def admin_i18n_page():
-    return FileResponse("src/frontend/pages/admin-i18n.html")
+    return page_response("src/frontend/pages/admin-i18n.html")
 
 
 @app.get("/notifications")
 def notifications_page():
-    return FileResponse("src/frontend/pages/notification.html")
+    return page_response("src/frontend/pages/notification.html")
