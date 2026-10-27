@@ -189,11 +189,62 @@ async def _can_send_magic(redis, email: str) -> bool:
         return True
 
 
+# Per-IP / per-account throttles for credential and token endpoints.
+# Sliding-window counters in Redis; degrade to allow-all when redis is absent
+# (same convention as the email resend helpers above).
+AUTH_FAIL_WINDOW_S = 600        # 10 minutes
+AUTH_FAIL_IP_LIMIT = 10         # failed logins per IP
+AUTH_FAIL_ACCT_LIMIT = 5        # failed logins per account handle
+AUTH_MAGIC_IP_LIMIT = 5         # magic-link requests per IP
+AUTH_REGISTER_IP_LIMIT = 10     # registrations per IP
+AUTH_TOKEN_IP_LIMIT = 15        # failed token validations per IP
+
+
+def _client_ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
+
+
+async def _auth_count(redis, key: str) -> int:
+    if not redis:
+        return 0
+    try:
+        return int(await redis.get(key) or 0)
+    except Exception:
+        return 0
+
+
+async def _auth_hit(redis, key: str) -> None:
+    if not redis:
+        return
+    try:
+        if await redis.incr(key) == 1:
+            await redis.expire(key, AUTH_FAIL_WINDOW_S)
+    except Exception:
+        pass
+
+
+async def _auth_clear(redis, *keys: str) -> None:
+    if not redis:
+        return
+    try:
+        await redis.delete(*keys)
+    except Exception:
+        pass
+
+
+async def _auth_require_below(redis, key: str, limit: int) -> None:
+    if await _auth_count(redis, key) >= limit:
+        raise HTTPException(status_code=429, detail="Too many attempts, try again later")
+
+
 @router.post("/confirm-email", response_model=ConfirmEmailOut)
-async def confirm_email(body: ConfirmEmailIn, pool = Depends(get_pool)):
+async def confirm_email(request: Request, body: ConfirmEmailIn, pool = Depends(get_pool)):
     token = (body.token or "").strip()
     if not token:
         raise HTTPException(status_code=400, detail="token required")
+    redis = get_redis(request)
+    tok_ip_key = f"auth:token:ip:{_client_ip(request)}"
+    await _auth_require_below(redis, tok_ip_key, AUTH_TOKEN_IP_LIMIT)
     token_hash = _hash_token(token)
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
@@ -208,11 +259,13 @@ async def confirm_email(body: ConfirmEmailIn, pool = Depends(get_pool)):
             )
             row = await cur.fetchone()
             if not row:
+                await _auth_hit(redis, tok_ip_key)
                 raise HTTPException(status_code=404, detail="Invalid or expired token")
             account_id = row[0]
             expires_at = row[1]
             now = _now()
             if expires_at and expires_at < now:
+                await _auth_hit(redis, tok_ip_key)
                 raise HTTPException(status_code=410, detail="Confirmation token expired")
             await cur.execute(
                 """
@@ -280,6 +333,10 @@ async def resend_confirmation(request: Request, account_id: str = Depends(get_cu
 
 @router.post("/register", response_model=TokenOut)
 async def register(body: RegisterIn, request: Request, response: Response, pool = Depends(get_pool)):
+    redis = get_redis(request)
+    reg_ip_key = f"auth:register:ip:{_client_ip(request)}"
+    await _auth_require_below(redis, reg_ip_key, AUTH_REGISTER_IP_LIMIT)
+    await _auth_hit(redis, reg_ip_key)
     handle_raw = (body.handle or "").strip()
     if not handle_raw:
         raise HTTPException(status_code=422, detail="handle required")
@@ -399,6 +456,9 @@ async def request_magic_link(request: Request, body: MagicLinkRequestIn, pool = 
     if not key:
         raise HTTPException(status_code=400, detail="handle_or_email required")
     redis = get_redis(request)
+    magic_ip_key = f"auth:magic:ip:{_client_ip(request)}"
+    await _auth_require_below(redis, magic_ip_key, AUTH_MAGIC_IP_LIMIT)
+    await _auth_hit(redis, magic_ip_key)
     handle: Optional[str] = None
     email: Optional[str] = None
     account_id: Optional[str] = None
@@ -460,6 +520,9 @@ async def consume_magic_link(body: MagicLinkConsumeIn, request: Request, respons
     token = (body.token or "").strip()
     if not token:
         raise HTTPException(status_code=400, detail="token required")
+    redis = get_redis(request)
+    tok_ip_key = f"auth:token:ip:{_client_ip(request)}"
+    await _auth_require_below(redis, tok_ip_key, AUTH_TOKEN_IP_LIMIT)
     token_hash = _hash_token(token)
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
@@ -474,11 +537,13 @@ async def consume_magic_link(body: MagicLinkConsumeIn, request: Request, respons
             )
             row = await cur.fetchone()
             if not row:
+                await _auth_hit(redis, tok_ip_key)
                 raise HTTPException(status_code=404, detail="Invalid or expired token")
             account_id = str(row[0])
             expires_at = row[1]
             now = _now()
             if expires_at and expires_at < now:
+                await _auth_hit(redis, tok_ip_key)
                 raise HTTPException(status_code=410, detail="Magic login token expired")
             await cur.execute(
                 """
@@ -519,6 +584,17 @@ async def login(body: LoginIn, request: Request, response: Response, pool = Depe
     if not key or not body.password:
         raise HTTPException(status_code=400, detail="credentials required")
 
+    redis = get_redis(request)
+    ip_key = f"auth:fail:ip:{_client_ip(request)}"
+    acct_key = f"auth:fail:acct:{key.lower()}"
+    await _auth_require_below(redis, ip_key, AUTH_FAIL_IP_LIMIT)
+    await _auth_require_below(redis, acct_key, AUTH_FAIL_ACCT_LIMIT)
+
+    async def _fail() -> HTTPException:
+        await _auth_hit(redis, ip_key)
+        await _auth_hit(redis, acct_key)
+        return HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
@@ -532,10 +608,12 @@ async def login(body: LoginIn, request: Request, response: Response, pool = Depe
             )
             row = await cur.fetchone()
             if not row:
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+                raise await _fail()
             account_id, password_hash_db, confirmed_at = row
             if not password_hash_db or not verify_password(body.password, password_hash_db):
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+                raise await _fail()
+
+    await _auth_clear(redis, ip_key, acct_key)
 
     token = create_access_token(subject=str(account_id))
     # Set JWT token in httpOnly cookie for security
