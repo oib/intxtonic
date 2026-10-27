@@ -556,14 +556,32 @@
         const data = await res.json();
         showToast('Post published','ok');
         if (data?.id) {
-          // Attach selected tags (if any)
+          // Attach selected tags (if any). Re-attaching a tag the server already
+          // added (handle, language) returns 200, so only real failures are collected.
           const arr = Array.from(selectedTags.values() || []);
+          const failed = [];
           for (const tag of arr) {
             try {
-              await fetch(`/posts/${data.id}/tags`, { method:'POST', headers:{ 'Content-Type':'application/json', ...authHeaders() }, body: JSON.stringify({ slug: tag.slug, label: tag.label }) });
-            } catch {}
+              const tr = await fetch(`/posts/${data.id}/tags`, { method:'POST', headers:{ 'Content-Type':'application/json', ...authHeaders() }, body: JSON.stringify({ slug: tag.slug, label: tag.label }) });
+              if (!tr.ok) failed.push({ slug: tag.slug, reason: await apiErrorMessage(tr, `HTTP ${tr.status}`) });
+            } catch {
+              failed.push({ slug: tag.slug, reason: 'could not reach the server' });
+            }
           }
-          window.location.href = `/post/${data.id}`; return;
+          const postUrl = `/post/${encodeURIComponent(data.id)}`;
+          if (!failed.length) { window.location.href = postUrl; return; }
+          // The post exists: stay here so the user sees which tags are missing,
+          // and keep Publish disabled so the post isn't created twice.
+          const list = failed.map(f => `#${f.slug} (${f.reason})`).join(', ');
+          const note = failed.length === 1 ? '1 tag could not be added' : `${failed.length} tags could not be added`;
+          elMsg.replaceChildren(
+            document.createTextNode(`Post published, but ${note}: ${list}. You can add tags on the post page. `),
+            Object.assign(document.createElement('a'), { href: postUrl, className: 'link', textContent: 'Open post' })
+          );
+          elMsg.style.display = 'inline-block';
+          showToast(`Post published, but ${note}`, 'warn');
+          elBtnPublish.textContent = 'Published';
+          return;
         }
         elMsg.textContent = 'Published, but missing id in response';
         elMsg.style.display = 'inline-block';
