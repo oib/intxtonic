@@ -430,6 +430,8 @@ async def create_post(body: PostCreateIn, account_id: str = Depends(get_current_
     text = (body.body_md or "").strip()
     if not title or not text:
         raise HTTPException(status_code=400, detail="title and body_md required")
+    if len(title) > 200:
+        raise HTTPException(status_code=422, detail="Title too long (max 200 characters)")
     if len(text) > 1200:
         raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Post body too long (max 1200 characters)")
     if body.visibility not in ("logged_in", "private", "unlisted"):

@@ -59,3 +59,28 @@ main.container {
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/* Markdown tables in posts and replies */
+.table-wrap {
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+
+.table-wrap table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.95rem;
+}
+
+.table-wrap th,
+.table-wrap td {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--bd-2);
+  text-align: left;
+  vertical-align: top;
+}
+
+.table-wrap th {
+  background: var(--bg-3);
+  font-weight: 600;
+}
