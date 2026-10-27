@@ -7,6 +7,7 @@ except ModuleNotFoundError:  # pragma: no cover - depends on Starlette version
 from starlette.staticfiles import StaticFiles
 from pathlib import Path
 from starlette.responses import RedirectResponse, FileResponse, HTMLResponse
+import json
 import re
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -145,21 +146,42 @@ def _asset_version() -> str:
 
 _ASSET_URL_RE = re.compile(r"/src/frontend/[^'\"<>\s#?]+(\?[^'\"<>\s#]*)?")
 
+_JS_DIR = "src/frontend/js"
+
+
+def _import_map(sha: str) -> str:
+    """Map every js module URL to its ?v= variant so relative imports inside
+    modules (e.g. './auth.js' in ai.js) resolve to the same versioned URL and
+    no module gets instantiated twice."""
+    js_root = _PROJECT_ROOT / _JS_DIR
+    imports = {}
+    if js_root.is_dir():
+        for p in sorted(js_root.rglob("*.js")):
+            url = f"/{_JS_DIR}/{p.relative_to(js_root).as_posix()}"
+            imports[url] = f"{url}?v={sha}"
+    return f'<script type="importmap">{json.dumps({"imports": imports})}</script>'
+
 
 def page_response(page_path: str) -> HTMLResponse:
     """Serve an HTML page with ?v=<commit> stamped on /src/frontend asset URLs.
 
     Ensures browsers fetch fresh CSS/JS after each deploy instead of relying
-    on heuristic caching of unversioned URLs.
+    on heuristic caching of unversioned URLs. An import map redirects relative
+    module imports to the same versioned URLs.
     """
     html = (_PROJECT_ROOT / page_path).read_text(encoding="utf-8")
+    sha = _asset_version()
 
     def _stamp(m: re.Match) -> str:
         if m.group(1):  # already has a query string, leave untouched
             return m.group(0)
-        return f"{m.group(0)}?v={_asset_version()}"
+        return f"{m.group(0)}?v={sha}"
 
-    return HTMLResponse(_ASSET_URL_RE.sub(_stamp, html))
+    html = _ASSET_URL_RE.sub(_stamp, html)
+    # must precede the first module script
+    if "<head>" in html:
+        html = html.replace("<head>", "<head>\n  " + _import_map(sha), 1)
+    return HTMLResponse(html)
 
 _FEATURE_PAGES = {
     "translation-engine": "src/frontend/pages/features/translation-engine.html",
