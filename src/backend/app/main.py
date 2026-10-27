@@ -119,32 +119,28 @@ _PROJECT_ROOT = _project_root_from_here()
 # Serve uploaded files from absolute path to align with upload saver
 app.mount("/uploads", StaticFiles(directory=str(_PROJECT_ROOT / "src" / "frontend" / "uploads")), name="uploads")
 
-_ASSET_VERSION: str | None = None
-
-
 def _asset_version() -> str:
-    global _ASSET_VERSION
-    if _ASSET_VERSION is None:
-        try:
-            head = (_PROJECT_ROOT / ".git" / "HEAD").read_text().strip()
-            if head.startswith("ref:"):
-                ref = head.split(None, 1)[1]
-                ref_file = _PROJECT_ROOT / ".git" / ref
-                if ref_file.exists():
-                    sha = ref_file.read_text().strip()
-                else:  # packed refs
-                    packed = (_PROJECT_ROOT / ".git" / "packed-refs").read_text()
-                    sha = next(
-                        (l.split()[0] for l in packed.splitlines()
-                         if not l.startswith(("#", "^")) and l.endswith(ref)),
-                        "",
-                    )
-            else:
-                sha = head  # detached HEAD
-            _ASSET_VERSION = sha[:12] or "dev"
-        except Exception:
-            _ASSET_VERSION = "dev"
-    return _ASSET_VERSION
+    # Read per call: pages are rendered per request anyway, and this lets a
+    # frontend-only `git pull` bump the version without an app restart.
+    try:
+        head = (_PROJECT_ROOT / ".git" / "HEAD").read_text().strip()
+        if head.startswith("ref:"):
+            ref = head.split(None, 1)[1]
+            ref_file = _PROJECT_ROOT / ".git" / ref
+            if ref_file.exists():
+                sha = ref_file.read_text().strip()
+            else:  # packed refs
+                packed = (_PROJECT_ROOT / ".git" / "packed-refs").read_text()
+                sha = next(
+                    (l.split()[0] for l in packed.splitlines()
+                     if not l.startswith(("#", "^")) and l.endswith(ref)),
+                    "",
+                )
+        else:
+            sha = head  # detached HEAD
+        return sha[:12] or "dev"
+    except Exception:
+        return "dev"
 
 
 _ASSET_URL_RE = re.compile(r"/src/frontend/[^'\"<>\s#?]+(\?[^'\"<>\s#]*)?")
