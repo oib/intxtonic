@@ -8,11 +8,8 @@
 - **Admin Tools**: Extend tag governance docs with `created_by_admin` provenance and dashboard flows ✅ completed
 
 ## ⏭️ Phase 2 · Next Up
-- **AI & Translation**: Complete translation worker integration and job status monitoring
-- **AI & Translation**: Add translation and summarization endpoints to frontend UI
 - **Docs**: Finalize `layout.md` for 960px grid and mobile design
 - **Docs**: Expand `admin.md` with moderator tasks and permissions
-- **Dev & Docs**: Update README (profiles section, moderation notes, deployment with nginx reverse proxy)
 - **Dev & Docs**: Add automated tests for user endpoints and multi-tag search scenarios
 - **Dev & Ops**: Capture coverage artifacts in CI and surface them on PR comments
 - **Backend**: Add integration tests enforcing restricted tag visibility (guests vs members vs admins)
@@ -68,6 +65,10 @@
 - File upload handling via `/uploads` endpoint with image processing
 - Admin queue management system for monitoring background jobs
 - Moderation tools with admin-only endpoints for content management
+- Translation and summarization wired into the frontend (translate → summarize flow with disabled-state hint)
+- UI/a11y pass on post and create pages: real form + labels, vote-button `aria-label`s, `<time>` dates, skip link, meta description, consistent headers
+- Stored-XSS fixes in the Markdown renderer and AI output paths (full quote escaping before `innerHTML`)
+- Cache hygiene: `no-cache` on HTML and statics, `?v=<git-sha>` asset stamping, import map for versioned JS modules (2026-10-27)
 
 ### 🧪 Tests & CI
 - Pytest with httpx ASGI coverage of health, auth/posts, tags/replies, permissions (403), rate limits (429), and post filtering

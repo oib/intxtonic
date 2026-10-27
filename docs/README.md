@@ -127,6 +127,11 @@ sudo systemctl start redis-server
 ```
 - Health: http://localhost:8002/health
 
+### Caching & static assets
+
+- The app sends `Cache-Control: no-cache` on `text/html` pages and on `/src/frontend` + `/i18n` statics (ETag/Last-Modified revalidation).
+- HTML pages are served via `page_response()` (`main.py`), which stamps `?v=<git-sha>` on `/src/frontend/` asset URLs and injects an import map so relative JS module imports resolve to the same versioned URL. A `git pull` is enough to bust caches; no extra nginx rules needed.
+
 ### Nginx Reverse Proxy Example
 For production deployment, you may want to set up an Nginx reverse proxy to handle incoming requests, provide SSL termination, and serve static files efficiently. Below is an example configuration:
 
