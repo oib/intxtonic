@@ -28,8 +28,21 @@ Per-account overrides for posts/replies live in `app.user_limits`.
 - **ai translate/summarize**: enqueue-only; worker is a separate service; body length
   pre-checked (1200). Job status is per-id, no per-user listing.
 
+## Redis throttles (per-IP / per-account, 10-min window)
+
+| Endpoint | Key | Limit |
+|---|---|---|
+| `POST /auth/login` (failed) | `auth:fail:ip:*` | 10 |
+| `POST /auth/login` (failed) | `auth:fail:acct:*` | 5 |
+| `POST /auth/register` | `auth:register:ip:*` | 10 |
+| `POST /auth/request-magic-link` | `auth:magic:ip:*` | 5 |
+| `POST /auth/confirm-email`, `consume-magic-link` (failed token) | `auth:token:ip:*` | 15 |
+
+Counters degrade to allow-all when Redis is unavailable (same convention as the
+existing `email:resend`/`email:magic` fixed windows). Successful login clears the
+IP and account counters.
+
 ## Known residuals (accepted for now)
 
-- No per-IP/login throttling on auth endpoints (token guessing is unthrottled).
 - Uploads are publicly fetchable by URL once known.
 - Rate counters are per-account; multi-account abuse is unbounded.

@@ -135,6 +135,10 @@ sudo systemctl start redis-server
 ### Database backups (production)
 
 - `autopostgresqlbackup` runs daily on the container → `/var/lib/autopostgresqlbackup/{daily,weekly,monthly}/intxtonic/` (retention: 14 daily / 5 weekly / 12 monthly).
+- `/etc/cron.daily/pg-dump-plain` also writes a **plain pg_dump** to `/var/lib/autopostgresqlbackup/plain/intxtonic/` (14-day retention) — restorable into any DB name with no edits:
+  ```bash
+  zcat .../plain/intxtonic/intxtonic_YYYY-MM-DD.sql.gz | sudo -u postgres psql -d <target_db>
+  ```
 - **Restore caveat**: dumps embed `CREATE DATABASE` + `\connect intxtonic` — strip those two lines before restoring to a scratch DB:
   ```bash
   zcat .../intxtonic_YYYY-MM-DD_*.sql.gz | grep -vE "^CREATE DATABASE|^\\\\connect" | sudo -u postgres psql -d <target_db>
