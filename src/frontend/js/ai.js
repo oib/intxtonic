@@ -2,15 +2,10 @@
 
 import { authHeaders, getToken } from './auth.js';
 import { showToast } from './toast.js';
+import { escapeHTML } from './markdown.js';
 
 const JOB_POLL_INTERVAL_MS = 2000;
 const JOB_POLL_TIMEOUT_MS = 120000;
-
-function escapeHTML(s) {
-  return String(s ?? '')
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
 
 // The API answers errors as {"error":{"message":…}} (older routes: {"detail":…}).
 // Fall back to a short status line instead of dumping raw JSON or an HTML error page.

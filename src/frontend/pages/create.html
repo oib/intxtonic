@@ -176,6 +176,7 @@
   <script type="module">
     import { authHeaders, getToken, clearToken } from '/src/frontend/js/auth.js';
     import { showToast } from '/src/frontend/js/toast.js';
+    import { escapeHTML } from '/src/frontend/js/markdown.js';
     import preloader from '/src/frontend/js/preloader.js';
 
     // Initialize preloader
@@ -215,10 +216,6 @@
       showToast('Signed out','ok');
       window.location.href = '/';
     });
-
-    function escapeHTML(s){
-      return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-    }
 
     function makeSlug(label){
       return (label || '')

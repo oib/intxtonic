@@ -19,8 +19,11 @@ seeds:
 dev: install
 	bash scripts/dev_run.sh
 
-test: install
+test: install test-js
 	APP_ENV=test .venv/bin/pytest -q --cov=src/backend --cov-report=term-missing
+
+test-js:
+	node --test dev/tests/js/*.test.mjs
 
 ci:
 	APP_ENV=ci .venv/bin/pytest -q --cov=src/backend --cov-report=xml
