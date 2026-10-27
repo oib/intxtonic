@@ -4,7 +4,8 @@ from functools import lru_cache
 from urllib.parse import quote_plus
 import os
 from dataclasses import dataclass
-from dotenv import load_dotenv
+from dotenv import load_dotenv, dotenv_values
+from pathlib import Path
 
 
 @dataclass(frozen=True)
@@ -35,60 +36,65 @@ class Settings(BaseSettings):
 
 @lru_cache()
 def get_settings() -> Settings:
+    _env_file = Path(__file__).resolve().parents[4] / '.env'
+    _own = {k: v for k, v in dotenv_values(_env_file).items() if v is not None}
+    env = {**os.environ, **_own}
+    if 'DATABASE_URL' not in _own:
+        env.pop('DATABASE_URL', None)
     load_dotenv()
-    email_from = os.getenv('EMAIL_FROM')
+    email_from = env.get('EMAIL_FROM')
     if not email_from:
         raise RuntimeError('EMAIL_FROM must be set in environment (see .env)')
 
-    email_from_name = os.getenv('EMAIL_FROM_NAME')
+    email_from_name = env.get('EMAIL_FROM_NAME')
     if not email_from_name:
         raise RuntimeError('EMAIL_FROM_NAME must be set in environment (see .env)')
-    frontend_base_url = os.getenv('FRONTEND_BASE_URL')
+    frontend_base_url = env.get('FRONTEND_BASE_URL')
     if not frontend_base_url:
         raise RuntimeError('FRONTEND_BASE_URL must be set in environment (see .env)')
 
-    smtp_server = os.getenv('SMTP_SERVER')
+    smtp_server = env.get('SMTP_SERVER')
     if not smtp_server:
         raise RuntimeError('SMTP_SERVER must be set in environment (see .env)')
-    smtp_port = int(os.getenv('SMTP_PORT', '25'))
-    smtp_use_tls = os.getenv('SMTP_USE_TLS', 'false').lower() in ('1','true','yes')
-    smtp_use_ssl = os.getenv('SMTP_USE_SSL', 'false').lower() in ('1','true','yes')
-    smtp_user = os.getenv('SMTP_USER', '')
-    smtp_password = os.getenv('SMTP_PASSWORD', '')
-    redis_url = os.getenv('REDIS_URL')
+    smtp_port = int(env.get('SMTP_PORT', '25'))
+    smtp_use_tls = env.get('SMTP_USE_TLS', 'false').lower() in ('1','true','yes')
+    smtp_use_ssl = env.get('SMTP_USE_SSL', 'false').lower() in ('1','true','yes')
+    smtp_user = env.get('SMTP_USER', '')
+    smtp_password = env.get('SMTP_PASSWORD', '')
+    redis_url = env.get('REDIS_URL')
     if not redis_url:
         raise RuntimeError('REDIS_URL must be set in environment (see .env)')
 
     # Secrets and service endpoints
-    secret_key = os.getenv('APP_SECRET', '')
+    secret_key = env.get('APP_SECRET', '')
 
-    database_url = os.getenv('DATABASE_URL', '')
+    database_url = env.get('DATABASE_URL', '')
     if not database_url:
-        db_host = os.getenv('DB_HOST', 'localhost')
-        db_port = os.getenv('DB_PORT', '5432')
-        db_name = os.getenv('DB_NAME', 'postgres')
-        db_user = os.getenv('DB_USER', '')
-        db_password = os.getenv('DB_PASSWORD', '')
+        db_host = env.get('DB_HOST', 'localhost')
+        db_port = env.get('DB_PORT', '5432')
+        db_name = env.get('DB_NAME', 'postgres')
+        db_user = env.get('DB_USER', '')
+        db_password = env.get('DB_PASSWORD', '')
         password_fragment = f":{quote_plus(db_password)}" if db_password else ''
         auth_fragment = f"{db_user}{password_fragment}@" if db_user else ''
         database_url = f"postgresql://{auth_fragment}{db_host}:{db_port}/{db_name}"
 
-    ollama_base_url = os.getenv('OPENWEBUI_BASE_URL', os.getenv('OLLAMA_BASE', ''))
-    ollama_api_key = os.getenv('OPENWEBUI_API_KEY', os.getenv('OLLAMA_API_KEY', ''))
-    ollama_model = os.getenv('OPENWEBUI_MODEL_TRANSLATE',
-                             os.getenv('OPENWEBUI_MODEL_SUMMARY', os.getenv('OLLAMA_MODEL', '')))
+    ollama_base_url = env.get('OPENWEBUI_BASE_URL', env.get('OLLAMA_BASE', ''))
+    ollama_api_key = env.get('OPENWEBUI_API_KEY', env.get('OLLAMA_API_KEY', ''))
+    ollama_model = env.get('OPENWEBUI_MODEL_TRANSLATE',
+                             env.get('OPENWEBUI_MODEL_SUMMARY', env.get('OLLAMA_MODEL', '')))
 
-    cors_origins = os.getenv('CORS_ALLOW_ORIGINS')
+    cors_origins = env.get('CORS_ALLOW_ORIGINS')
     if cors_origins:
         cors_allow_origins = [o.strip() for o in cors_origins.split(',') if o.strip()]
     else:
         cors_allow_origins = ["*"]
 
-    app_env = os.getenv('APP_ENV')
+    app_env = env.get('APP_ENV')
     if not app_env:
         raise RuntimeError('APP_ENV must be set in environment (see .env)')
 
-    default_max_posts_per_day_val = os.getenv('DEFAULT_MAX_POSTS_PER_DAY')
+    default_max_posts_per_day_val = env.get('DEFAULT_MAX_POSTS_PER_DAY')
     if not default_max_posts_per_day_val:
         raise RuntimeError('DEFAULT_MAX_POSTS_PER_DAY must be set in environment (see .env)')
     try:
@@ -96,7 +102,7 @@ def get_settings() -> Settings:
     except ValueError as exc:
         raise RuntimeError('DEFAULT_MAX_POSTS_PER_DAY must be an integer') from exc
 
-    default_max_replies_per_day_val = os.getenv('DEFAULT_MAX_REPLIES_PER_DAY')
+    default_max_replies_per_day_val = env.get('DEFAULT_MAX_REPLIES_PER_DAY')
     if not default_max_replies_per_day_val:
         raise RuntimeError('DEFAULT_MAX_REPLIES_PER_DAY must be set in environment (see .env)')
     try:

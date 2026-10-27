@@ -178,7 +178,7 @@ async def main() -> None:
     if not settings.database_url:
         raise RuntimeError("DATABASE_URL is not configured")
 
-    redis = Redis.from_url(settings.redis_url, decode_responses=True)
+    redis = Redis.from_url(settings.redis_url, decode_responses=True, socket_timeout=None, socket_connect_timeout=5)
     pool = AsyncConnectionPool(conninfo=settings.database_url, max_size=10, num_workers=3, open=False)
     await pool.open()
 
