@@ -126,10 +126,22 @@ def _asset_version() -> str:
     global _ASSET_VERSION
     if _ASSET_VERSION is None:
         try:
-            import subprocess
-            _ASSET_VERSION = subprocess.check_output(
-                ["git", "rev-parse", "--short", "HEAD"], cwd=_PROJECT_ROOT
-            ).decode().strip() or "dev"
+            head = (_PROJECT_ROOT / ".git" / "HEAD").read_text().strip()
+            if head.startswith("ref:"):
+                ref = head.split(None, 1)[1]
+                ref_file = _PROJECT_ROOT / ".git" / ref
+                if ref_file.exists():
+                    sha = ref_file.read_text().strip()
+                else:  # packed refs
+                    packed = (_PROJECT_ROOT / ".git" / "packed-refs").read_text()
+                    sha = next(
+                        (l.split()[0] for l in packed.splitlines()
+                         if not l.startswith(("#", "^")) and l.endswith(ref)),
+                        "",
+                    )
+            else:
+                sha = head  # detached HEAD
+            _ASSET_VERSION = sha[:12] or "dev"
         except Exception:
             _ASSET_VERSION = "dev"
     return _ASSET_VERSION
