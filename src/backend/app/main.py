@@ -90,10 +90,18 @@ def health():
     return {"status": "ok"}
 
 
+class NoCacheStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        if response.status_code == 200:
+            response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 # Serve static frontend (css/js/pages/assets). Paths stay as absolute '/src/frontend/...'
-app.mount("/src/frontend", StaticFiles(directory="src/frontend"), name="frontend")
+app.mount("/src/frontend", NoCacheStaticFiles(directory="src/frontend"), name="frontend")
 # Serve i18n locale JSON files
-app.mount("/i18n", StaticFiles(directory="i18n"), name="i18n")
+app.mount("/i18n", NoCacheStaticFiles(directory="i18n"), name="i18n")
 def _project_root_from_here() -> Path:
     here = Path(__file__).resolve()
     for anc in here.parents:
