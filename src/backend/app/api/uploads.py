@@ -8,6 +8,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
 from ..core.deps import get_current_account_id
+from ..core.db import get_pool
+from ..core.config import get_settings
 from .auth import csrf_validate
 
 router = APIRouter(prefix="/uploads", tags=["uploads"]) 
@@ -45,6 +47,7 @@ MAX_BYTES = 5 * 1024 * 1024  # 5MB
 async def upload_image(
     file: UploadFile = File(...),
     account_id: str = Depends(get_current_account_id),
+    pool = Depends(get_pool),
     __: bool = Depends(csrf_validate),
 ):
     """Accept an image upload and return a public URL.
@@ -55,6 +58,23 @@ async def upload_image(
     ctype = file.content_type.lower()
     if ctype not in ALLOWED_MIME:
         raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="unsupported image type")
+
+    # Daily upload cap (same app.rate_limits counter pattern as posts/replies)
+    max_uploads = get_settings().default_max_uploads_per_day
+    async with pool.connection() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                """
+                INSERT INTO app.rate_limits (account_id, day_utc, uploads_count)
+                VALUES (%s, (now() at time zone 'UTC')::date, 1)
+                ON CONFLICT (account_id, day_utc)
+                DO UPDATE SET uploads_count = app.rate_limits.uploads_count + 1
+                RETURNING uploads_count
+                """,
+                (account_id,),
+            )
+            if (await cur.fetchone())[0] > max_uploads:
+                raise HTTPException(status_code=429, detail="Daily upload limit reached")
 
     # Limit size by reading up to MAX_BYTES + 1
     data = await file.read(MAX_BYTES + 1)

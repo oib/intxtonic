@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS app.rate_limits (
   day_utc        date NOT NULL,
   posts_count    integer NOT NULL DEFAULT 0,
   replies_count  integer NOT NULL DEFAULT 0,
+  uploads_count  integer NOT NULL DEFAULT 0,
   PRIMARY KEY (account_id, day_utc)
 );
 

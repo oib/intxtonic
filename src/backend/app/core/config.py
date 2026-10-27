@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     ollama_model: str = ""
     default_max_posts_per_day: int
     default_max_replies_per_day: int
+    default_max_uploads_per_day: int = 30
     app_env: str
     cors_allow_origins: List[str] = ["*"]
     email_from: str = ""
@@ -123,6 +124,7 @@ def get_settings() -> Settings:
         cors_allow_origins=cors_allow_origins,
         default_max_posts_per_day=default_max_posts_per_day,
         default_max_replies_per_day=default_max_replies_per_day,
+        default_max_uploads_per_day=int(env.get('DEFAULT_MAX_UPLOADS_PER_DAY') or 30),
         email_from=email_from,
         email_from_name=email_from_name,
         frontend_base_url=frontend_base_url,
