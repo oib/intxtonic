@@ -132,6 +132,16 @@ sudo systemctl start redis-server
 - The app sends `Cache-Control: no-cache` on `text/html` pages and on `/src/frontend` + `/i18n` statics (ETag/Last-Modified revalidation).
 - HTML pages are served via `page_response()` (`main.py`), which stamps `?v=<git-sha>` on `/src/frontend/` asset URLs and injects an import map so relative JS module imports resolve to the same versioned URL. A `git pull` is enough to bust caches; no extra nginx rules needed.
 
+### Database backups (production)
+
+- `autopostgresqlbackup` runs daily on the container → `/var/lib/autopostgresqlbackup/{daily,weekly,monthly}/intxtonic/` (retention: 14 daily / 5 weekly / 12 monthly).
+- **Restore caveat**: dumps embed `CREATE DATABASE` + `\connect intxtonic` — strip those two lines before restoring to a scratch DB:
+  ```bash
+  zcat .../intxtonic_YYYY-MM-DD_*.sql.gz | grep -vE "^CREATE DATABASE|^\\\\connect" | sudo -u postgres psql -d <target_db>
+  ```
+  Otherwise the restore connects back into the live `intxtonic` DB (PK conflicts prevented data damage in testing, but don't rely on it).
+- Verified 2026-10-27: restore into scratch DB, 0 errors, row counts match live.
+
 ### Nginx Reverse Proxy Example
 For production deployment, you may want to set up an Nginx reverse proxy to handle incoming requests, provide SSL termination, and serve static files efficiently. Below is an example configuration:
 
