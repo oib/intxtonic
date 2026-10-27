@@ -82,6 +82,8 @@ async def security_headers(request, call_next):
             "Content-Security-Policy",
             "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; font-src 'self' data:; object-src 'none'; frame-ancestors 'none'",
         )
+    if response.headers.get("content-type", "").startswith("text/html"):
+        response.headers["Cache-Control"] = "no-cache"
     return response
 
 
