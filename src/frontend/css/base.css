@@ -31,7 +31,7 @@ button,input,select,textarea{ font:inherit; color:inherit; }
 h1, h2, h3, h4, h5, h6 {
   margin: 0 0 0.5rem 0; /* Consistent margin */
   font-weight: 600; /* Or bold, depending on design */
-  color: var(--tx-2); /* Use theme color for readability */
+  color: var(--tx-0); /* Headings use primary text; --tx-2 is the muted tone */
   font-size: 1.2rem; /* Base font size */
   line-height: 1.3; /* Consistent line height */
 }
