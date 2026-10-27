@@ -64,8 +64,9 @@
   cursor: pointer;
 }
 
-.lang-picker select:focus {
-  outline: none;
+.lang-picker:focus-within {
+  outline: 2px solid var(--ice);
+  outline-offset: 2px;
 }
 
 .visually-hidden {
@@ -246,6 +247,13 @@
   color: var(--pri);
 }
 
+.home-post__title:focus-visible {
+  color: var(--pri);
+  outline: 2px solid var(--ice);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 .home-post__meta {
   font-size: 0.85rem;
   color: var(--tx-2);
@@ -254,6 +262,11 @@
 .home-post__excerpt {
   font-size: 0.95rem;
   color: var(--tx-1);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  overflow: hidden;
 }
 
 .home-post__tags {

@@ -1,7 +1,7 @@
 /* Base: variables, reset, typography, utilities */
 :root{
   --bg-0:#0b0f14; --bg-1:#11161c; --bg-2:#0f131a; --bg-3:#1a1f29;
-  --tx-0:#e6edf3; --tx-1:#a7b3be; --tx-2:#e6edf3;
+  --tx-0:#e6edf3; --tx-1:#a7b3be; --tx-2:#8b98a5;
   --pri:#ff7a1a; --ice:#b9ecff;
   --ok:#3ddc97; --warn:#ffcc00; --err:#ff4d4d;
   --bd-1:rgba(185,236,255,.12); --bd-2:rgba(185,236,255,.18);
@@ -17,7 +17,7 @@
 /* Reset */
 *{ box-sizing:border-box; }
 html,body{ height:100%; }
-html{ color-scheme:dark; }
+html{ color-scheme:dark; background:#0b0f14; }
 body{
   margin:0; background:var(--bg-0); color:var(--tx-0);
   font:16px/1.5 -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif;
